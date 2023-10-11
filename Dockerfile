@@ -5,8 +5,16 @@ ARG USER_PASSWORD
 ARG USER_ID
 ARG USER_GID
 
-RUN apt-get update
-RUN apt install sudo
+
+RUN apt-key del A4B469963BF863C \
+  && apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub \
+  && apt-get update 
+
+  # && dpkg -i cuda-keyring_1.0-1_all.deb \
+  # apt-get install wget \
+  # && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb \
+
+RUN apt-get install -y sudo wget
 RUN useradd -ms /bin/bash $USER_NAME
 RUN usermod -aG sudo $USER_NAME
 RUN yes $USER_PASSWORD | passwd $USER_NAME
@@ -43,10 +51,10 @@ RUN sudo pip3 install \
 RUN apt-get update && apt-get install -y \
    mesa-utils \
    python3-setuptools \
+   python3-dev \
    && rm -rf /var/lib/apt/lists/*
 
-
-RUN sudo pip3 install \
+RUN sudo pip3 install --no-input \
    absl-py>=0.7.0  \
    gym==0.17.3 \
    pybullet>=3.0.4 \
@@ -69,7 +77,7 @@ RUN sudo pip3 install \
 
 
 # change ownership of everything to our user
-RUN mkdir /home/$USER_NAME/cliport
+RUN mkdir -p /home/$USER_NAME/cliport
 RUN cd /home/$USER_NAME/cliport && echo $(pwd) && chown $USER_NAME:$USER_NAME -R .
 RUN echo "export CLIPORT_ROOT=~/cliport" >> /home/$USER_NAME/.bashrc
 RUN echo "export PYTHONPATH=$PYTHONPATH:~/cliport" >> /home/$USER_NAME/.bashrc
