@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+
+  cliport:
+    image: yang-cliport
+    container_name: cliport
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - .:/home/yang/cliport
+
+
+
+
