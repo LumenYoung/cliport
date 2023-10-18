@@ -52,16 +52,23 @@ sh scripts/quickstart_download.sh
 
 Generate a small `test` set of 10 instances for `stack-block-pyramid-seq-seen-colors` inside  `$CLIPORT_ROOT/data`:
 ```bash
-python cliport/demos.py n=10 \
+python3 cliport/demos.py n=10 \
+                        task=put-block-in-bowl-seen-colors \
+                        mode=test 
+```   
+
+```bash
+python3 cliport/demos.py n=10 \
                         task=stack-block-pyramid-seq-seen-colors \
                         mode=test 
 ```   
 This will take a few minutes to finish. 
 
 Evaluate the best validation checkpoint for `stack-block-pyramid-seq-seen-colors` on the test set:
+
 ```bash
-python cliport/eval.py model_task=multi-language-conditioned \
-                       eval_task=stack-block-pyramid-seq-seen-colors \
+python3 cliport/eval.py model_task=multi-language-conditioned \
+                       eval_task=put-block-in-bowl-seen-colors \
                        agent=cliport \
                        mode=test \
                        n_demos=10 \
@@ -69,7 +76,7 @@ python cliport/eval.py model_task=multi-language-conditioned \
                        exp_folder=cliport_quickstart \
                        checkpoint_type=test_best \
                        update_results=True \
-                       disp=True
+                       disp=False
 ```
 If you are on a headless machine turn off the visualization with `disp=False`. 
 
@@ -409,3 +416,4 @@ Changes: Used as is in [unet.py](cliport/models/core/unet.py). Note: This part o
 ## Questions or Issues?
 
 Please file an issue with the issue tracker.  
+
