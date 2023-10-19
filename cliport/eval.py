@@ -12,6 +12,56 @@ from cliport import tasks
 from cliport.utils import utils
 from cliport.environments.environment import Environment
 
+from PIL import Image
+from langchain.llms.base import LLM
+
+from typing import Any, List, Mapping, Optional, Dict, Union, Iterator
+
+from langchain.callbacks.manager import CallbackManagerForLLMRun
+from langchain.llms.base import LLM
+from langchain.schema import Generation, LLMResult
+from langchain.schema.output import GenerationChunk
+import requests
+
+
+def array_to_image(array, filename):
+    """
+    Convert a numpy array to an image and save it to a file.
+
+    Parameters:
+    array (numpy.ndarray): The numpy array to convert.
+    filename (str): The name of the file to save the image to.
+    """
+    # Convert the array to an image
+    img = Image.fromarray(array.astype('uint8'))
+
+    # Save the image
+    img.save(filename)
+
+
+class LLaVA(LLM):
+    url: str = "http://experiment_env:6000/conversation"
+    StopStr: str = "<s>"
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+
+    @property
+    def _llm_type(self) -> str:
+        return "llava"
+
+    def _call(
+        self,
+        prompt: str,
+        images: Dict[str, bytes] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> str:
+        response = requests.post(self.url, files=images, data={"prompt": prompt})
+
+        # assert type(response) == str, f"Unexpected Behavior. Response is {type(response)}, not a string."
+        return response.json()
+
 
 @hydra.main(config_path="./cfg", config_name="eval")
 def main(vcfg):
@@ -140,6 +190,7 @@ def main(vcfg):
                     lang_goal = info["lang_goal"]
                     print(f"Lang Goal: {lang_goal}")
                     obs, reward, done, info = env.step(act)
+                    import pdb; pdb.set_trace()
                     total_reward += reward
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
                     if done:
@@ -228,4 +279,13 @@ def list_ckpts_to_eval(vcfg, existing_results):
 
 
 if __name__ == "__main__":
+
+    llm = LLaVA()
+
+    prompt = "Who do you think is the most handsome guy on the world?"
+
+    response = llm(prompt)
+
+    print(response)
+
     main()

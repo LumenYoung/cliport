@@ -1,4 +1,4 @@
-FROM nvidia/cudagl:11.1.1-devel-ubuntu18.04
+FROM nvidia/cudagl:11.1.1-devel-ubuntu20.04
 
 ARG USER_NAME
 ARG USER_PASSWORD
@@ -27,6 +27,9 @@ RUN groupmod -g $USER_GID $USER_NAME
 WORKDIR /home/$USER_NAME
 
 # install system dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Berlin
+
 COPY ./scripts/install_deps.sh /tmp/install_deps.sh
 RUN yes "Y" | /tmp/install_deps.sh
 
@@ -42,7 +45,7 @@ RUN apt-get -y install python3-pip
 RUN sudo python3 -m pip install --upgrade pip
 
 # install pytorch
-RUN sudo pip3 install \
+RUN sudo pip3 install -y --no-input\
    torch==1.9.1+cu111 \
    torchvision==0.10.1+cu111 \
    -f https://download.pytorch.org/whl/torch_stable.html
@@ -63,7 +66,7 @@ RUN sudo pip3 install --no-input \
    meshcat>=0.0.18 \
    scipy==1.4.1 \
    scikit-image==0.17.2 \
-   transforms3d==0.3.1 \
+   transforms3d==0.4.1 \
    pytorch_lightning==1.0.3 \
    tdqm \
    hydra-core==1.0.5 \
@@ -73,9 +76,10 @@ RUN sudo pip3 install --no-input \
    ftfy \
    regex \
    ffmpeg \
-   imageio-ffmpeg
+   imageio-ffmpeg \
+   packaging==21.3
 
-RUN pip3 uninstall --no-input wandb \
+RUN pip3 uninstall --no-input -y wandb \
   && pip3 install --no-input wandb
 
 # change ownership of everything to our user
