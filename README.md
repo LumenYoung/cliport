@@ -30,13 +30,13 @@ Setup virtualenv and install requirements:
 # setup virtualenv with whichever package manager you prefer
 virtualenv -p $(which python3.8) --system-site-packages cliport_env  
 source cliport_env/bin/activate
-pip install --upgrade pip
+pip3 install --upgrade pip
 
 cd cliport
 pip install -r requirements.txt
 
 export CLIPORT_ROOT=$(pwd)
-python setup.py develop
+python3 setup.py develop
 ```
 
 **Note**: You might need versions of `torch==1.7.1` and `torchvision==0.8.2` that are compatible with your CUDA and hardware. 

@@ -75,9 +75,13 @@ RUN sudo pip3 install --no-input \
    ffmpeg \
    imageio-ffmpeg
 
+RUN pip3 uninstall --no-input wandb \
+  && pip3 install --no-input wandb
+
 
 # change ownership of everything to our user
 RUN mkdir -p /home/$USER_NAME/cliport
 RUN cd /home/$USER_NAME/cliport && echo $(pwd) && chown $USER_NAME:$USER_NAME -R .
 RUN echo "export CLIPORT_ROOT=~/cliport" >> /home/$USER_NAME/.bashrc
 RUN echo "export PYTHONPATH=$PYTHONPATH:~/cliport" >> /home/$USER_NAME/.bashrc
+RUN echo "cd cliport && python3 setup.py develop" >> /home/$USER_NAME/.bashrc
