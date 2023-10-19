@@ -68,7 +68,7 @@ Evaluate the best validation checkpoint for `stack-block-pyramid-seq-seen-colors
 
 ```bash
 python3 cliport/eval.py model_task=multi-language-conditioned \
-                       eval_task=put-block-in-bowl-seen-colors \
+                       eval_task=stack-block-pyramid-seq-seen-colors \
                        agent=cliport \
                        mode=test \
                        n_demos=10 \

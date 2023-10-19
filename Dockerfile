@@ -78,7 +78,6 @@ RUN sudo pip3 install --no-input \
 RUN pip3 uninstall --no-input wandb \
   && pip3 install --no-input wandb
 
-
 # change ownership of everything to our user
 RUN mkdir -p /home/$USER_NAME/cliport
 RUN cd /home/$USER_NAME/cliport && echo $(pwd) && chown $USER_NAME:$USER_NAME -R .
