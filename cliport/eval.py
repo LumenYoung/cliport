@@ -190,7 +190,6 @@ def main(vcfg):
                     lang_goal = info["lang_goal"]
                     print(f"Lang Goal: {lang_goal}")
                     obs, reward, done, info = env.step(act)
-                    import pdb; pdb.set_trace()
                     total_reward += reward
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
                     if done:
@@ -280,12 +279,12 @@ def list_ckpts_to_eval(vcfg, existing_results):
 
 if __name__ == "__main__":
 
-    llm = LLaVA()
+    # llm = LLaVA()
 
-    prompt = "Who do you think is the most handsome guy on the world?"
+    # prompt = "Who do you think is the most handsome guy on the world?"
 
-    response = llm(prompt)
+    # response = llm(prompt)
 
-    print(response)
+    # print(response)
 
     main()
