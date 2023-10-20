@@ -57,6 +57,15 @@ python3 cliport/demos.py n=10 \
                         mode=test 
 ```   
 
+Task List:
+
+- align-rope
+- assembling-kits-seq-seen-colors
+- assembling-kits-seq-unseen-colors
+- assembling-kits-seq-full
+- put-block-in-bowl-full
+- towers-of-hanoi-seq-full
+
 ```bash
 python3 cliport/demos.py n=10 \
                         task=stack-block-pyramid-seq-seen-colors \
