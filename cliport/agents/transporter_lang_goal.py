@@ -91,6 +91,7 @@ class TwoStreamClipLingUNetTransporterAgent(TransporterAgent):
         place_conf = self.trans_forward(place_inp)
         place_conf = place_conf.permute(1, 2, 0)
         place_conf = place_conf.detach().cpu().numpy()
+        ## TODO, what is the in the argmax, how uncertain and certain for the first and second candidate.
         argmax = np.argmax(place_conf)
         argmax = np.unravel_index(argmax, shape=place_conf.shape)
         p1_pix = argmax[:2]
