@@ -17,21 +17,23 @@ import pybullet as p
 PLACE_STEP = 0.0003
 PLACE_DELTA_THRESHOLD = 0.005
 
-UR5_URDF_PATH = 'ur5/ur5.urdf'
-UR5_WORKSPACE_URDF_PATH = 'ur5/workspace.urdf'
-PLANE_URDF_PATH = 'plane/plane.urdf'
+UR5_URDF_PATH = "ur5/ur5.urdf"
+UR5_WORKSPACE_URDF_PATH = "ur5/workspace.urdf"
+PLANE_URDF_PATH = "plane/plane.urdf"
 
 
 class Environment(gym.Env):
     """OpenAI Gym-style environment class."""
 
-    def __init__(self,
-                 assets_root,
-                 task=None,
-                 disp=False,
-                 shared_memory=False,
-                 hz=240,
-                 record_cfg=None):
+    def __init__(
+        self,
+        assets_root,
+        task=None,
+        disp=False,
+        shared_memory=False,
+        hz=240,
+        record_cfg=None,
+    ):
         """Creates OpenAI Gym-style environment with PyBullet.
 
         Args:
@@ -46,42 +48,55 @@ class Environment(gym.Env):
           RuntimeError: if pybullet cannot load fileIOPlugin.
         """
         self.pix_size = 0.003125
-        self.obj_ids = {'fixed': [], 'rigid': [], 'deformable': []}
+        self.obj_ids = {"fixed": [], "rigid": [], "deformable": []}
         self.homej = np.array([-1, -0.5, 0.5, -0.5, -0.5, 0]) * np.pi
         self.agent_cams = cameras.RealSenseD415.CONFIG
         self.record_cfg = record_cfg
         self.save_video = False
         self.step_counter = 0
 
+        self.last_frame = None
+
+        self.feedback = ""
+
         self.assets_root = assets_root
 
         color_tuple = [
-            gym.spaces.Box(0, 255, config['image_size'] + (3,), dtype=np.uint8)
+            gym.spaces.Box(0, 255, config["image_size"] + (3,), dtype=np.uint8)
             for config in self.agent_cams
         ]
         depth_tuple = [
-            gym.spaces.Box(0.0, 20.0, config['image_size'], dtype=np.float32)
+            gym.spaces.Box(0.0, 20.0, config["image_size"], dtype=np.float32)
             for config in self.agent_cams
         ]
-        self.observation_space = gym.spaces.Dict({
-            'color': gym.spaces.Tuple(color_tuple),
-            'depth': gym.spaces.Tuple(depth_tuple),
-        })
+        self.observation_space = gym.spaces.Dict(
+            {
+                "color": gym.spaces.Tuple(color_tuple),
+                "depth": gym.spaces.Tuple(depth_tuple),
+            }
+        )
         self.position_bounds = gym.spaces.Box(
-            low=np.array([0.25, -0.5, 0.], dtype=np.float32),
+            low=np.array([0.25, -0.5, 0.0], dtype=np.float32),
             high=np.array([0.75, 0.5, 0.28], dtype=np.float32),
             shape=(3,),
-            dtype=np.float32)
-        self.action_space = gym.spaces.Dict({
-            'pose0':
-                gym.spaces.Tuple(
-                    (self.position_bounds,
-                     gym.spaces.Box(-1.0, 1.0, shape=(4,), dtype=np.float32))),
-            'pose1':
-                gym.spaces.Tuple(
-                    (self.position_bounds,
-                     gym.spaces.Box(-1.0, 1.0, shape=(4,), dtype=np.float32)))
-        })
+            dtype=np.float32,
+        )
+        self.action_space = gym.spaces.Dict(
+            {
+                "pose0": gym.spaces.Tuple(
+                    (
+                        self.position_bounds,
+                        gym.spaces.Box(-1.0, 1.0, shape=(4,), dtype=np.float32),
+                    )
+                ),
+                "pose1": gym.spaces.Tuple(
+                    (
+                        self.position_bounds,
+                        gym.spaces.Box(-1.0, 1.0, shape=(4,), dtype=np.float32),
+                    )
+                ),
+            }
+        )
 
         # Start PyBullet.
         disp_option = p.DIRECT
@@ -90,21 +105,22 @@ class Environment(gym.Env):
             if shared_memory:
                 disp_option = p.SHARED_MEMORY
         client = p.connect(disp_option)
-        file_io = p.loadPlugin('fileIOPlugin', physicsClientId=client)
+        file_io = p.loadPlugin("fileIOPlugin", physicsClientId=client)
         if file_io < 0:
-            raise RuntimeError('pybullet: cannot load FileIO!')
+            raise RuntimeError("pybullet: cannot load FileIO!")
         if file_io >= 0:
             p.executePluginCommand(
                 file_io,
                 textArgument=assets_root,
                 intArgs=[p.AddFileIOAction],
-                physicsClientId=client)
+                physicsClientId=client,
+            )
 
         p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.setPhysicsEngineParameter(enableFileCaching=0)
         p.setAdditionalSearchPath(assets_root)
         p.setAdditionalSearchPath(tempfile.gettempdir())
-        p.setTimeStep(1. / hz)
+        p.setTimeStep(1.0 / hz)
 
         # If using --disp, move default camera closer to the scene.
         if disp:
@@ -113,31 +129,32 @@ class Environment(gym.Env):
                 cameraDistance=1.1,
                 cameraYaw=90,
                 cameraPitch=-25,
-                cameraTargetPosition=target)
+                cameraTargetPosition=target,
+            )
 
         if task:
             self.set_task(task)
 
     def __del__(self):
-        if hasattr(self, 'video_writer'):
+        if hasattr(self, "video_writer"):
             self.video_writer.close()
 
     @property
     def is_static(self):
         """Return true if objects are no longer moving."""
-        v = [np.linalg.norm(p.getBaseVelocity(i)[0])
-             for i in self.obj_ids['rigid']]
+        v = [np.linalg.norm(p.getBaseVelocity(i)[0]) for i in self.obj_ids["rigid"]]
         return all(np.array(v) < 5e-3)
 
-    def add_object(self, urdf, pose, category='rigid'):
+    def add_object(self, urdf, pose, category="rigid"):
         """List of (fixed, rigid, or deformable) objects in env."""
-        fixed_base = 1 if category == 'fixed' else 0
+        fixed_base = 1 if category == "fixed" else 0
         obj_id = pybullet_utils.load_urdf(
             p,
             os.path.join(self.assets_root, urdf),
             pose[0],
             pose[1],
-            useFixedBase=fixed_base)
+            useFixedBase=fixed_base,
+        )
         if not obj_id is None:
             self.obj_ids[category].append(obj_id)
         return obj_id
@@ -153,24 +170,29 @@ class Environment(gym.Env):
     def reset(self):
         """Performs common reset functionality for all supported tasks."""
         if not self.task:
-            raise ValueError('environment task must be set. Call set_task or pass '
-                             'the task arg in the environment constructor.')
-        self.obj_ids = {'fixed': [], 'rigid': [], 'deformable': []}
+            raise ValueError(
+                "environment task must be set. Call set_task or pass "
+                "the task arg in the environment constructor."
+            )
+        self.obj_ids = {"fixed": [], "rigid": [], "deformable": []}
         p.resetSimulation(p.RESET_USE_DEFORMABLE_WORLD)
         p.setGravity(0, 0, -9.8)
 
         # Temporarily disable rendering to load scene faster.
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
 
-        pybullet_utils.load_urdf(p, os.path.join(self.assets_root, PLANE_URDF_PATH),
-                                 [0, 0, -0.001])
         pybullet_utils.load_urdf(
-            p, os.path.join(self.assets_root, UR5_WORKSPACE_URDF_PATH), [0.5, 0, 0])
+            p, os.path.join(self.assets_root, PLANE_URDF_PATH), [0, 0, -0.001]
+        )
+        pybullet_utils.load_urdf(
+            p, os.path.join(self.assets_root, UR5_WORKSPACE_URDF_PATH), [0.5, 0, 0]
+        )
 
         # Load UR5 robot arm equipped with suction end effector.
         # TODO(andyzeng): add back parallel-jaw grippers.
         self.ur5 = pybullet_utils.load_urdf(
-            p, os.path.join(self.assets_root, UR5_URDF_PATH))
+            p, os.path.join(self.assets_root, UR5_URDF_PATH)
+        )
         self.ee = self.task.ee(self.assets_root, self.ur5, 9, self.obj_ids)
         self.ee_tip = 10  # Link ID of suction cup.
 
@@ -195,7 +217,7 @@ class Environment(gym.Env):
         obs, _, _, _ = self.step()
         return obs
 
-    def step(self, action=None):
+    def step(self, action=None, feedback: str = None):
         """Execute action with specified primitive.
 
         Args:
@@ -205,19 +227,24 @@ class Environment(gym.Env):
           (obs, reward, done, info) tuple containing MDP step data.
         """
         if action is not None:
-            timeout = self.task.primitive(self.movej, self.movep, self.ee, action['pose0'], action['pose1'])
+            timeout = self.task.primitive(
+                self.movej, self.movep, self.ee, action["pose0"], action["pose1"]
+            )
 
             # Exit early if action times out. We still return an observation
             # so that we don't break the Gym API contract.
             if timeout:
-                obs = {'color': (), 'depth': ()}
+                obs = {"color": (), "depth": ()}
                 for config in self.agent_cams:
                     color, depth, _ = self.render_camera(config)
-                    obs['color'] += (color,)
-                    obs['depth'] += (depth,)
+                    obs["color"] += (color,)
+                    obs["depth"] += (depth,)
                 return obs, 0.0, True, self.info
 
         # Step simulator asynchronously until objects settle.
+        if feedback is not None:
+            self.feedback = feedback
+
         while not self.is_static:
             self.step_simulation()
 
@@ -239,30 +266,30 @@ class Environment(gym.Env):
         if self.save_video and self.step_counter % 5 == 0:
             self.add_video_frame()
 
-    def render(self, mode='rgb_array'):
+    def render(self, mode="rgb_array"):
         # Render only the color image from the first camera.
         # Only support rgb_array for now.
-        if mode != 'rgb_array':
-            raise NotImplementedError('Only rgb_array implemented')
+        if mode != "rgb_array":
+            raise NotImplementedError("Only rgb_array implemented")
         color, _, _ = self.render_camera(self.agent_cams[0])
         return color
 
     def render_camera(self, config, image_size=None, shadow=1):
         """Render RGB-D image with specified camera configuration."""
         if not image_size:
-            image_size = config['image_size']
+            image_size = config["image_size"]
 
         # OpenGL camera settings.
         lookdir = np.float32([0, 0, 1]).reshape(3, 1)
         updir = np.float32([0, -1, 0]).reshape(3, 1)
-        rotation = p.getMatrixFromQuaternion(config['rotation'])
+        rotation = p.getMatrixFromQuaternion(config["rotation"])
         rotm = np.float32(rotation).reshape(3, 3)
         lookdir = (rotm @ lookdir).reshape(-1)
         updir = (rotm @ updir).reshape(-1)
-        lookat = config['position'] + lookdir
-        focal_len = config['intrinsics'][0]
-        znear, zfar = config['zrange']
-        viewm = p.computeViewMatrix(config['position'], lookat, updir)
+        lookat = config["position"] + lookdir
+        focal_len = config["intrinsics"][0]
+        znear, zfar = config["zrange"]
+        viewm = p.computeViewMatrix(config["position"], lookat, updir)
         fovh = (image_size[0] / 2) / focal_len
         fovh = 180 * np.arctan(fovh) * 2 / np.pi
 
@@ -278,13 +305,14 @@ class Environment(gym.Env):
             projectionMatrix=projm,
             shadow=shadow,
             flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
-            renderer=p.ER_BULLET_HARDWARE_OPENGL)
+            renderer=p.ER_BULLET_HARDWARE_OPENGL,
+        )
 
         # Get color image.
         color_image_size = (image_size[0], image_size[1], 4)
         color = np.array(color, dtype=np.uint8).reshape(color_image_size)
         color = color[:, :, :3]  # remove alpha channel
-        if config['noise']:
+        if config["noise"]:
             color = np.int32(color)
             color += np.int32(self._random.normal(0, 3, image_size))
             color = np.uint8(np.clip(color, 0, 255))
@@ -292,9 +320,9 @@ class Environment(gym.Env):
         # Get depth image.
         depth_image_size = (image_size[0], image_size[1])
         zbuffer = np.array(depth).reshape(depth_image_size)
-        depth = (zfar + znear - (2. * zbuffer - 1.) * (zfar - znear))
-        depth = (2. * znear * zfar) / depth
-        if config['noise']:
+        depth = zfar + znear - (2.0 * zbuffer - 1.0) * (zfar - znear)
+        depth = (2.0 * znear * zfar) / depth
+        if config["noise"]:
             depth += self._random.normal(0, 0.003, depth_image_size)
 
         # Get segmentation image.
@@ -319,7 +347,7 @@ class Environment(gym.Env):
                 dim = p.getVisualShapeData(obj_id)[0][3]
                 info[obj_id] = (pos, rot, dim)
 
-        info['lang_goal'] = self.get_lang_goal()
+        info["lang_goal"] = self.get_lang_goal()
         return info
 
     def set_task(self, task):
@@ -359,35 +387,37 @@ class Environment(gym.Env):
                 jointIndices=self.joints,
                 controlMode=p.POSITION_CONTROL,
                 targetPositions=stepj,
-                positionGains=gains)
+                positionGains=gains,
+            )
             self.step_counter += 1
             self.step_simulation()
 
-        print(f'Warning: movej exceeded {timeout} second timeout. Skipping.')
+        print(f"Warning: movej exceeded {timeout} second timeout. Skipping.")
         return True
 
     def start_rec(self, video_filename):
         assert self.record_cfg
 
         # make video directory
-        if not os.path.exists(self.record_cfg['save_video_path']):
-            os.makedirs(self.record_cfg['save_video_path'])
+        if not os.path.exists(self.record_cfg["save_video_path"]):
+            os.makedirs(self.record_cfg["save_video_path"])
 
         # close and save existing writer
-        if hasattr(self, 'video_writer'):
+        if hasattr(self, "video_writer"):
             self.video_writer.close()
 
         # initialize writer
-        self.video_writer = imageio.get_writer(os.path.join(self.record_cfg['save_video_path'],
-                                                            f"{video_filename}.mp4"),
-                                               fps=self.record_cfg['fps'],
-                                               format='FFMPEG',
-                                               codec='h264',)
+        self.video_writer = imageio.get_writer(
+            os.path.join(self.record_cfg["save_video_path"], f"{video_filename}.mp4"),
+            fps=self.record_cfg["fps"],
+            format="FFMPEG",
+            codec="h264",
+        )
         p.setRealTimeSimulation(False)
         self.save_video = True
 
     def end_rec(self):
-        if hasattr(self, 'video_writer'):
+        if hasattr(self, "video_writer"):
             self.video_writer.close()
 
         p.setRealTimeSimulation(True)
@@ -396,12 +426,11 @@ class Environment(gym.Env):
     def add_video_frame(self):
         # Render frame.
         config = self.agent_cams[0]
-        image_size = (self.record_cfg['video_height'], self.record_cfg['video_width'])
+        image_size = (self.record_cfg["video_height"], self.record_cfg["video_width"])
         color, depth, _ = self.render_camera(config, image_size, shadow=0)
         color = np.array(color)
 
-        # Add language instruction to video.
-        if self.record_cfg['add_text']:
+        if self.record_cfg["add_text"]:
             lang_goal = self.get_lang_goal()
             reward = f"Success: {self.task.get_reward():.3f}"
 
@@ -410,14 +439,60 @@ class Environment(gym.Env):
             font_thickness = 1
 
             # Write language goal.
-            lang_textsize = cv2.getTextSize(lang_goal, font, font_scale, font_thickness)[0]
+            lang_textsize = cv2.getTextSize(
+                lang_goal, font, font_scale, font_thickness
+            )[0]
             lang_textX = (image_size[1] - lang_textsize[0]) // 2
 
-            color = cv2.putText(color, lang_goal, org=(lang_textX, 600),
-                                fontScale=font_scale,
-                                fontFace=font,
-                                color=(0, 0, 0),
-                                thickness=font_thickness, lineType=cv2.LINE_AA)
+            color = cv2.putText(
+                color,
+                lang_goal,
+                org=(lang_textX, 600),
+                fontScale=font_scale,
+                fontFace=font,
+                color=(0, 0, 0),
+                thickness=font_thickness,
+                lineType=cv2.LINE_AA,
+            )
+
+        if self.last_frame is None: # add nothing on first startup
+            self.last_frame = color
+            return
+
+        # Add feedback from second frames on
+        last_color = self.last_frame
+        self.last_frame = color
+
+        def chunkstring(string, length):
+            return (string[0+i:length+i] for i in range(0, len(string), length))
+
+        if self.feedback is not None:
+            feedback_scale = 0.7
+            feedback_textsize = cv2.getTextSize(
+                self.feedback[:40],
+                font,
+                font_scale / feedback_scale,
+                font_thickness,
+            )[0]
+
+            length_feedback = len(self.feedback)
+            char_each_line = 60
+            offset_each_line = 25  # the offset of each line of display
+            feedback_textX = (image_size[1] - feedback_textsize[0]) // 2
+
+            splited_feedbacks = chunkstring(self.feedback, char_each_line)
+
+            for i, string in enumerate(splited_feedbacks):
+                last_color = cv2.putText(
+                    last_color,
+                    string,
+                    org=(feedback_textX, 30 + offset_each_line * i),
+                    fontScale=font_scale * feedback_scale,
+                    fontFace=font,
+                    color=(0, 0, 0),
+                    thickness=font_thickness,
+                    lineType=cv2.LINE_AA,
+                )
 
             ## Write Reward.
             # reward_textsize = cv2.getTextSize(reward, font, font_scale, font_thickness)[0]
@@ -429,9 +504,12 @@ class Environment(gym.Env):
             #                     color=(0, 0, 0),
             #                     thickness=font_thickness, lineType=cv2.LINE_AA)
 
-            color = np.array(color)
+        last_color = np.array(last_color)
 
-        self.video_writer.append_data(color)
+        self.video_writer.append_data(last_color)
+
+    def add_video_end_frame(self):
+        self.video_writer.append_data(np.array(self.last_frame))
 
     def movep(self, pose, speed=0.01):
         """Move UR5 to target end effector pose."""
@@ -450,18 +528,19 @@ class Environment(gym.Env):
             jointRanges=[np.pi, 2.3562, 34, 34, 34, 34],  # * 6,
             restPoses=np.float32(self.homej).tolist(),
             maxNumIterations=100,
-            residualThreshold=1e-5)
+            residualThreshold=1e-5,
+        )
         joints = np.float32(joints)
         joints[2:] = (joints[2:] + np.pi) % (2 * np.pi) - np.pi
         return joints
 
     def _get_obs(self):
         # Get RGB-D camera image observations.
-        obs = {'color': (), 'depth': ()}
+        obs = {"color": (), "depth": ()}
         for config in self.agent_cams:
             color, depth, _ = self.render_camera(config)
-            obs['color'] += (color,)
-            obs['depth'] += (depth,)
+            obs["color"] += (color,)
+            obs["depth"] += (depth,)
 
         return obs
 
@@ -469,26 +548,26 @@ class Environment(gym.Env):
 class EnvironmentNoRotationsWithHeightmap(Environment):
     """Environment that disables any rotations and always passes [0, 0, 0, 1]."""
 
-    def __init__(self,
-                 assets_root,
-                 task=None,
-                 disp=False,
-                 shared_memory=False,
-                 hz=240):
-        super(EnvironmentNoRotationsWithHeightmap,
-              self).__init__(assets_root, task, disp, shared_memory, hz)
+    def __init__(self, assets_root, task=None, disp=False, shared_memory=False, hz=240):
+        super(EnvironmentNoRotationsWithHeightmap, self).__init__(
+            assets_root, task, disp, shared_memory, hz
+        )
 
         heightmap_tuple = [
             gym.spaces.Box(0.0, 20.0, (320, 160, 3), dtype=np.float32),
             gym.spaces.Box(0.0, 20.0, (320, 160), dtype=np.float32),
         ]
-        self.observation_space = gym.spaces.Dict({
-            'heightmap': gym.spaces.Tuple(heightmap_tuple),
-        })
-        self.action_space = gym.spaces.Dict({
-            'pose0': gym.spaces.Tuple((self.position_bounds,)),
-            'pose1': gym.spaces.Tuple((self.position_bounds,))
-        })
+        self.observation_space = gym.spaces.Dict(
+            {
+                "heightmap": gym.spaces.Tuple(heightmap_tuple),
+            }
+        )
+        self.action_space = gym.spaces.Dict(
+            {
+                "pose0": gym.spaces.Tuple((self.position_bounds,)),
+                "pose1": gym.spaces.Tuple((self.position_bounds,)),
+            }
+        )
 
     def step(self, action=None):
         """Execute action with specified primitive.
@@ -501,20 +580,21 @@ class EnvironmentNoRotationsWithHeightmap(Environment):
         """
         if action is not None:
             action = {
-                'pose0': (action['pose0'][0], [0., 0., 0., 1.]),
-                'pose1': (action['pose1'][0], [0., 0., 0., 1.]),
+                "pose0": (action["pose0"][0], [0.0, 0.0, 0.0, 1.0]),
+                "pose1": (action["pose1"][0], [0.0, 0.0, 0.0, 1.0]),
             }
         return super(EnvironmentNoRotationsWithHeightmap, self).step(action)
 
     def _get_obs(self):
         obs = {}
 
-        color_depth_obs = {'color': (), 'depth': ()}
+        color_depth_obs = {"color": (), "depth": ()}
         for config in self.agent_cams:
             color, depth, _ = self.render_camera(config)
-            color_depth_obs['color'] += (color,)
-            color_depth_obs['depth'] += (depth,)
-        cmap, hmap = utils.get_fused_heightmap(color_depth_obs, self.agent_cams,
-                                               self.task.bounds, pix_size=0.003125)
-        obs['heightmap'] = (cmap, hmap)
+            color_depth_obs["color"] += (color,)
+            color_depth_obs["depth"] += (depth,)
+        cmap, hmap = utils.get_fused_heightmap(
+            color_depth_obs, self.agent_cams, self.task.bounds, pix_size=0.003125
+        )
+        obs["heightmap"] = (cmap, hmap)
         return obs

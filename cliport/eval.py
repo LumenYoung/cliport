@@ -1,5 +1,6 @@
 """Ravens main training script."""
 
+import io
 import os
 import pickle
 import json
@@ -23,6 +24,10 @@ from langchain.schema import Generation, LLMResult
 from langchain.schema.output import GenerationChunk
 import requests
 
+from collections import deque
+
+DEFAULT_IMAGE_TOKEN = "<image>"
+
 
 def array_to_image(array, filename):
     """
@@ -33,7 +38,7 @@ def array_to_image(array, filename):
     filename (str): The name of the file to save the image to.
     """
     # Convert the array to an image
-    img = Image.fromarray(array.astype('uint8'))
+    img = Image.fromarray(array.astype("uint8"))
 
     # Save the image
     img.save(filename)
@@ -57,10 +62,116 @@ class LLaVA(LLM):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> str:
-        response = requests.post(self.url, files=images, data={"prompt": prompt})
+        files = {name: (name, img, "image/png") for name, img in images.items()}
+        response = requests.post(self.url, files=files, data={"prompt": prompt})
 
         # assert type(response) == str, f"Unexpected Behavior. Response is {type(response)}, not a string."
         return response.json()
+
+    def feedback(self, img):
+        prompt: str = f"""
+        In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table, 
+        in {DEFAULT_IMAGE_TOKEN} is the outcome. 
+        Describe the movement of the robot.
+        """
+
+        np.array(img)
+
+
+def image_to_byte_array(image: Image):
+    imgByteArr = io.BytesIO()
+    image.save(imgByteArr, format=image.format)
+    imgByteArr = imgByteArr.getvalue()
+    return imgByteArr
+
+
+def llava_feedback(images: tuple, llm: LLaVA):
+    prompt: str = f"""
+    system: In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table, 
+    in {DEFAULT_IMAGE_TOKEN} is the outcome. 
+
+    goal: 
+        Describe the color and shape of the object starting with "object:". 
+        Describe the motion (most importantly direction in left, right, up, down) of the robot starting with "motion:".
+        Keep all descriptions short and simple. Reply with nothing irrelevant.
+
+    answer:
+    """
+    result: Dict = {}
+
+    img1 = Image.fromarray(np.array(images[0])).convert("RGB")
+    img1.format = "PNG"
+    # img1.info = {'dpi': (96.012, 96.012)}
+    img1.is_animated = False
+    img1.n_frames = 1
+    img1.resize((336, 336))
+
+    img2 = Image.fromarray(np.array(images[1])).convert("RGB")
+    img2.format = "PNG"
+    # img2.info = {'dpi': (96.012, 96.012)}
+    img2.is_animated = False
+    img2.n_frames = 1
+    img1.resize((336, 336))
+
+    # img1.save("dummy.png")
+
+    # with open("dummy.png", "rb") as img_file:
+    #     result["image_file_1"] = img_file.read()
+
+    result["image_file_1"] = image_to_byte_array(img1)
+    # img2.save("dummy.png")
+
+    # with open("dummy.png", "rb") as img_file:
+    #     result["image_file_2"] = img_file.read()
+
+    result["image_file_2"] = image_to_byte_array(img2)
+
+    return llm(prompt, images=result)
+
+
+################################### DEBUG CODE
+
+# images = obs["color"]
+# output = llava_feedback(images)
+
+# print(type(images))
+
+# p np.array(obs["color"][0]).shape
+# p Image.fromarray(np.array(obs["color"][0]))
+
+# img = Image.fromarray(np.array(obs["color"][0]))
+# img.format="PNG"
+# img_bytes = image_to_byte_array(img)
+# result = {}
+# result["image_file_1"] = img_bytes
+# files = {name: (name, img, 'image/png') for name, img in result.items()}
+# url = "http://experiment_env:6000/conversation"
+# prompt = "describe the image <image>"
+# response = requests.post(url, files=files, data={"prompt": prompt})
+
+
+# print(Image.fromarray(np.array(images[0])).convert("RGB").mode)
+###################################
+
+
+def llava_test():
+    DEFAULT_IMAGE_TOKEN = "<image>"
+
+    def get_images(filenames: List[str]) -> Dict[str, Any]:
+        files = {}
+        for i, image_path in enumerate(image_paths):
+            with open(image_path, "rb") as img_file:
+                files[f"image_file_{i+1}"] = img_file.read()
+
+        return files
+
+    llm = LLaVA()
+
+    imgs = ["images_for_feedback/robot with alphabet blocks.png"]
+    # prompt = "Who do you think is the most handsome guy on the world?"
+    prompt = f"In the image {DEFAULT_IMAGE_TOKEN} are several objects on the table, describe the shape and color of the objects"
+    response = llm(prompt, imgs)
+    print(response)
 
 
 @hydra.main(config_path="./cfg", config_name="eval")
@@ -68,6 +179,7 @@ def main(vcfg):
     # Load train cfg
     tcfg = utils.load_hydra_config(vcfg["train_config"])
 
+    llm = LLaVA()
     # Initialize environment and task.
     env = Environment(
         vcfg["assets_root"],
@@ -185,15 +297,30 @@ def main(vcfg):
                         video_name = f"{vcfg['model_task']}-{video_name}"
                     env.start_rec(video_name)
 
+                obs_queue = deque(maxlen=2)
+                obs_queue.append(obs["color"][0])
+
+                feedback = ""
+
                 for _ in range(task.max_steps):
                     act = agent.act(obs, info, goal)
                     lang_goal = info["lang_goal"]
                     print(f"Lang Goal: {lang_goal}")
-                    obs, reward, done, info = env.step(act)
+                    obs, reward, done, info = env.step(action=act, feedback=feedback)
+                    obs_queue.append(obs["color"][0])
+                    feedback = llava_feedback(tuple(obs_queue), llm)
+                    feedback = feedback[:200] if len(feedback) < 200 else feedback
+                    # obs_queue.popleft();
                     total_reward += reward
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
                     if done:
+                        env.add_video_end_frame()
+                        env.last_frame = None
                         break
+
+                # handle the last frame if max_steps is reached
+                if env.last_frame is not None:
+                    env.add_video_end_frame()
 
                 results.append((total_reward, info))
                 mean_reward = np.mean([r for r, i in results])
@@ -278,13 +405,6 @@ def list_ckpts_to_eval(vcfg, existing_results):
 
 
 if __name__ == "__main__":
-
-    # llm = LLaVA()
-
-    # prompt = "Who do you think is the most handsome guy on the world?"
-
-    # response = llm(prompt)
-
-    # print(response)
+    # llava_test()
 
     main()
