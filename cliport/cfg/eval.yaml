@@ -20,6 +20,8 @@ update_results: False # overwrite existing json results?
 checkpoint_type: 'val_missing'
 val_on_heldout: True
 
+feedback: False
+cli_img: True
 disp: False
 shared_memory: False
 eval_task: packing-boxes-pairs-seen-colors # task to evaluate the model on

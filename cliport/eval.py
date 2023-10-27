@@ -13,6 +13,8 @@ from cliport import tasks
 from cliport.utils import utils
 from cliport.environments.environment import Environment
 
+import PIL
+
 from PIL import Image
 from langchain.llms.base import LLM
 
@@ -28,6 +30,9 @@ from collections import deque
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 
+# -----------------------------------------------------------------------------
+# LLM communication utils
+# -----------------------------------------------------------------------------
 
 def array_to_image(array, filename):
     """
@@ -308,8 +313,16 @@ def main(vcfg):
                     print(f"Lang Goal: {lang_goal}")
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
                     obs_queue.append(obs["color"][0])
-                    feedback = llava_feedback(tuple(obs_queue), llm)
-                    feedback = feedback[:200] if len(feedback) < 200 else feedback
+                    breakpoint()
+
+                    #display current observation in cli
+                    if vcfg["cli_img"]:
+                        utils.display_image_in_cli([Image.fromarray(np.array(obs)) for obs in list(obs_queue)])
+
+                    if vcfg["feedback"]:
+                        feedback = llava_feedback(tuple(obs_queue), llm)
+                        feedback = feedback[:200] if len(feedback) < 200 else feedback
+
                     # obs_queue.popleft();
                     total_reward += reward
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
@@ -407,4 +420,10 @@ def list_ckpts_to_eval(vcfg, existing_results):
 if __name__ == "__main__":
     # llava_test()
 
+    # img_fn = "/home/yang/cliport/images_for_feedback/robot with alphabet blocks.png"
+    # img_fn = "/home/yang/cliport/images_for_feedback/robot with alphabet blocks.png"
+    # 
+    # img = Image.open(img_fn)
+    # img1 = Image.open(img_fn)
+    # utils.display_image_in_cli([img,img1])
     main()
