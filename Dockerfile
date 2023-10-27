@@ -77,7 +77,9 @@ RUN sudo pip3 install --no-input \
    regex \
    ffmpeg \
    imageio-ffmpeg \
-   packaging==21.3
+   packaging==21.3 \
+   chafa.py \
+   langchain
 
 RUN pip3 uninstall --no-input -y wandb \
   && pip3 install --no-input wandb
