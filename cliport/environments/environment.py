@@ -476,7 +476,7 @@ class Environment(gym.Env):
             )[0]
 
             length_feedback = len(self.feedback)
-            char_each_line = 60
+            char_each_line = 90
             offset_each_line = 25  # the offset of each line of display
             feedback_textX = (image_size[1] - feedback_textsize[0]) // 2
 

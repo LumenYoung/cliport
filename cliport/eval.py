@@ -34,6 +34,7 @@ DEFAULT_IMAGE_TOKEN = "<image>"
 # LLM communication utils
 # -----------------------------------------------------------------------------
 
+
 def array_to_image(array, filename):
     """
     Convert a numpy array to an image and save it to a file.
@@ -88,6 +89,58 @@ def image_to_byte_array(image: Image):
     image.save(imgByteArr, format=image.format)
     imgByteArr = imgByteArr.getvalue()
     return imgByteArr
+
+
+def llava_few_shot_feedback(images: tuple, llm: LLaVA):
+    prompt: str = f"""
+    system: You are trying to describe a robot manipulation outcome.
+    goal: 
+        Describe whether the goal is achieved or not. Reply with your reasoning and "goal: achieved" or "goal: not achieved".
+        Keep all descriptions short and simple. 
+
+    example 1:
+        Goal of the robot is to put the red M shape object in the M shape hole. 
+        In the image {DEFAULT_IMAGE_TOKEN} is the initial state, in {DEFAULT_IMAGE_TOKEN} is the outcome.
+
+        Reply: the red M shape object is placed in the right hole. goal: achieved
+
+    example 2:
+        Goal of the robot is to put the red M shape object in the M shape hole. 
+        In the image {DEFAULT_IMAGE_TOKEN} is the initial state, in {DEFAULT_IMAGE_TOKEN} is the outcome.
+
+        Reply: the red M shape object is placed in the wrong hole. goal: not achieved
+
+    Goal of the robot is to put the blue L shape object in the L shape hole. 
+    In the image {DEFAULT_IMAGE_TOKEN} is the initial state, in {DEFAULT_IMAGE_TOKEN} is the outcome. (Reply with nothing irrelevant)
+
+    answer:
+    """
+
+    # note: not working that good
+    img_fnames = [
+        "images_for_feedback/block-insertion-demo/red M not placed in any holes.png",
+        "images_for_feedback/block-insertion-demo/red M placed in the right hole.png",
+        "images_for_feedback/block-insertion-demo/red M not placed in any holes.png",
+        "images_for_feedback/block-insertion-demo/red M placed in the wrong hole.png",
+        # "/export/home/yang/thesis_demo/blue L not in any hole.png",
+        # # "/export/home/yang/thesis_demo/blue L not in any hole.png",
+        # "/export/home/yang/thesis_demo/blue L in the right hole.png",
+    ]
+
+    files: dict = {}
+
+    for i, img_fname in enumerate(img_fnames):
+        img = Image.open(img_fname)
+        imgByteArr = image_to_byte_array(img)
+        files[f"image_file_{i+1}"] = imgByteArr
+
+    for i, img in enumerate(images):
+        img = Image.fromarray(np.array(img)).convert("RGB")
+        img.format = "PNG"
+        imgByteArr = image_to_byte_array(img)
+        files[f"image_file_{i+ 1+ len(img_fnames)}"] = imgByteArr
+
+    return llm(prompt, images=files)
 
 
 def llava_feedback(images: tuple, llm: LLaVA):
@@ -313,15 +366,16 @@ def main(vcfg):
                     print(f"Lang Goal: {lang_goal}")
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
                     obs_queue.append(obs["color"][0])
-                    breakpoint()
 
-                    #display current observation in cli
+                    # display current observation in cli
                     if vcfg["cli_img"]:
-                        utils.display_image_in_cli([Image.fromarray(np.array(obs)) for obs in list(obs_queue)])
+                        utils.display_image_in_cli(
+                            [Image.fromarray(np.array(obs)) for obs in list(obs_queue)]
+                        )
 
                     if vcfg["feedback"]:
-                        feedback = llava_feedback(tuple(obs_queue), llm)
-                        feedback = feedback[:200] if len(feedback) < 200 else feedback
+                        feedback = llava_few_shot_feedback(tuple(obs_queue), llm)
+                        feedback = feedback[:300] if len(feedback) < 200 else feedback
 
                     # obs_queue.popleft();
                     total_reward += reward
@@ -422,7 +476,7 @@ if __name__ == "__main__":
 
     # img_fn = "/home/yang/cliport/images_for_feedback/robot with alphabet blocks.png"
     # img_fn = "/home/yang/cliport/images_for_feedback/robot with alphabet blocks.png"
-    # 
+    #
     # img = Image.open(img_fn)
     # img1 = Image.open(img_fn)
     # utils.display_image_in_cli([img,img1])
