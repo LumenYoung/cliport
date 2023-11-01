@@ -45,7 +45,7 @@ RUN apt-get -y install python3-pip
 RUN sudo python3 -m pip install --upgrade pip
 
 # install pytorch
-RUN sudo pip3 install -y --no-input\
+RUN sudo pip3 install --no-input\
    torch==1.9.1+cu111 \
    torchvision==0.10.1+cu111 \
    -f https://download.pytorch.org/whl/torch_stable.html
@@ -66,7 +66,6 @@ RUN sudo pip3 install --no-input \
    meshcat>=0.0.18 \
    scipy==1.4.1 \
    scikit-image==0.17.2 \
-   transforms3d==0.4.1 \
    pytorch_lightning==1.0.3 \
    tdqm \
    hydra-core==1.0.5 \
@@ -79,7 +78,8 @@ RUN sudo pip3 install --no-input \
    imageio-ffmpeg \
    packaging==21.3 \
    chafa.py \
-   langchain
+   langchain \
+   transforms3d 
 
 RUN pip3 uninstall --no-input -y wandb \
   && pip3 install --no-input wandb
