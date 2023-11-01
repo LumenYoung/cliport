@@ -131,14 +131,15 @@ def llava_few_shot_feedback(images: tuple, llm: LLaVA):
 
     for i, img_fname in enumerate(img_fnames):
         img = Image.open(img_fname)
+        img.resize((336, 336))
         imgByteArr = image_to_byte_array(img)
         files[f"image_file_{i+1}"] = imgByteArr
 
     for i, img in enumerate(images):
         img = Image.fromarray(np.array(img)).convert("RGB")
         img.format = "PNG"
-        imgByteArr = image_to_byte_array(img)
-        files[f"image_file_{i+ 1+ len(img_fnames)}"] = imgByteArr
+        img.resize((336, 336))
+        files[f"image_file_{i+ 1+ len(img_fnames)}"] = image_to_byte_array(img)
 
     return llm(prompt, images=files)
 
