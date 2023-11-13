@@ -1,0 +1,12 @@
+{
+  "typeCheckingMode": "basic",
+  "pythonPlatform": "Linux",
+  "reportMissingImports": false,
+  "useLibraryCodeForTypes": true,
+  "reportMissingTypeStubs": false,
+  "reportGeneralTypeIssues": false,
+  "reportPrivateImportUsage": "information",
+  "exclude": ["pdb_history.py"],
+  "ignore": ["pdb_history.py"]
+}
+
