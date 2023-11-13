@@ -20,7 +20,7 @@ update_results: False # overwrite existing json results?
 checkpoint_type: 'val_missing'
 val_on_heldout: True
 
-feedback: False
+feedback: True
 cli_img: True
 disp: False
 shared_memory: False

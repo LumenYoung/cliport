@@ -141,7 +141,7 @@ function run_cliport_controled() {
                          model_task=multi-language-conditioned \
                          agent=cliport \
                          mode=test \
-                         n_demos=1 \
+                         n_demos=10 \
                          train_demos=1000 \
                          exp_folder=cliport_controled_exp \
                          checkpoint_type=test_best \
@@ -157,7 +157,6 @@ function run_cliport_controled() {
 # task_names=("assembling-kits-seq-unseen-colors")
 
 # done testing, feedback on color can improve picking but placing is completely non-sense
-# task_names=("block-insertion")
 
 # Works fine without feedback
 # task_names=("put-block-in-bowl-seen-colors")
@@ -177,6 +176,7 @@ task_names=("towers-of-hanoi-seq-full")
 
 task_names=("palletizing-boxes")
 
+task_names=("block-insertion")
 # Loop over the array
 for task in "${task_names[@]}"
 do
