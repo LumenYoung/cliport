@@ -14,7 +14,5 @@ services:
               capabilities: [gpu]
     volumes:
       - .:/home/yang/cliport
-
-
-
-
+      - ../:/home/yang/llm # assume it is in the submodule of main repo
+      - /export/home/yang/memory/primary_experiment:/home/yang/memory_storage
