@@ -2,8 +2,10 @@
 
 import io
 import os
-import pickle
 import json
+from thesisexp.memory.MemoryStorage import MemEntry, NaiveMemStorage
+from thesisexp.memory.Memory import NaiveMemory, BaseMemory
+from thesisexp.utils import transform_mem_to_prompt, add_image_to_file
 
 import numpy as np
 import hydra
@@ -13,20 +15,16 @@ from cliport import tasks
 from cliport.utils import utils
 from cliport.environments.environment import Environment
 
-import PIL
-
 from PIL import Image
-from langchain.llms.base import LLM
 
-from typing import Any, List, Mapping, Optional, Dict, Union, Iterator
+from typing import Any, List, Optional, Dict, Tuple
 
 from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain.llms.base import LLM
-from langchain.schema import Generation, LLMResult
-from langchain.schema.output import GenerationChunk
 import requests
 
 from collections import deque
+
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 
@@ -74,14 +72,14 @@ class LLaVA(LLM):
         # assert type(response) == str, f"Unexpected Behavior. Response is {type(response)}, not a string."
         return response.json()
 
-    def feedback(self, img):
-        prompt: str = f"""
-        In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table, 
-        in {DEFAULT_IMAGE_TOKEN} is the outcome. 
-        Describe the movement of the robot.
-        """
+    # def feedback(self, img):
+    #     prompt: str = f"""
+    #     In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table,
+    #     in {DEFAULT_IMAGE_TOKEN} is the outcome.
+    #     Describe the movement of the robot.
+    #     """
 
-        np.array(img)
+    #     np.array(img)
 
 
 def image_to_byte_array(image: Image):
@@ -91,66 +89,69 @@ def image_to_byte_array(image: Image):
     return imgByteArr
 
 
-def llava_few_shot_feedback(images: tuple, llm: LLaVA):
-    prompt: str = f"""
-    system: You are trying to describe a robot manipulation outcome.
-    goal: 
-        Describe whether the goal is achieved or not. Reply with your reasoning and "goal: achieved" or "goal: not achieved".
-        Keep all descriptions short and simple. 
+def llava_few_shot_feedback(
+    curr_mem: MemEntry, llm: LLaVA, memory: BaseMemory
+) -> Tuple[str, bool]:
+    file = {}
+
+    good_example, bad_example = memory.sample("insert-block")
+
+    mem_good_prompt, images_1 = transform_mem_to_prompt(good_example)
+
+    add_image_to_file(file, images_1)
+
+    mem_bad_prompt, images_2 = transform_mem_to_prompt(bad_example)
+
+    add_image_to_file(file, images_2)
+
+    curr_prompt, images_3 = transform_mem_to_prompt(curr_mem)
+
+    add_image_to_file(file, images_3)
+
+    system_prompt = "You are trying to describe a robot manipulation outcome."
+
+    prompt = f"""
+    system: {system_prompt}
 
     example 1:
-        Goal of the robot is to put the red M shape object in the M shape hole. 
-        In the image {DEFAULT_IMAGE_TOKEN} is the initial state, in {DEFAULT_IMAGE_TOKEN} is the outcome.
-
-        Reply: the red M shape object is placed in the right hole. goal: achieved
+    {mem_good_prompt}
 
     example 2:
-        Goal of the robot is to put the red M shape object in the M shape hole. 
-        In the image {DEFAULT_IMAGE_TOKEN} is the initial state, in {DEFAULT_IMAGE_TOKEN} is the outcome.
+    {mem_bad_prompt}
 
-        Reply: the red M shape object is placed in the wrong hole. goal: not achieved
+    current observation:
+    {curr_prompt}
 
-    Goal of the robot is to put the blue L shape object in the L shape hole. 
-    In the image {DEFAULT_IMAGE_TOKEN} is the initial state, in {DEFAULT_IMAGE_TOKEN} is the outcome. (Reply with nothing irrelevant)
+    Describe whether the goal is achieved or not.
+    Reply with your reasoning and "goal: achieved" or "goal: not achieved".
+    Keep all descriptions short and simple.
 
     answer:
     """
 
-    # note: not working that good
-    img_fnames = [
-        "images_for_feedback/block-insertion-demo/red M not placed in any holes.png",
-        "images_for_feedback/block-insertion-demo/red M placed in the right hole.png",
-        "images_for_feedback/block-insertion-demo/red M not placed in any holes.png",
-        "images_for_feedback/block-insertion-demo/red M placed in the wrong hole.png",
-        # "/export/home/yang/thesis_demo/blue L not in any hole.png",
-        # # "/export/home/yang/thesis_demo/blue L not in any hole.png",
-        # "/export/home/yang/thesis_demo/blue L in the right hole.png",
-    ]
+    response1 = llm(prompt, images=file)
 
-    files: dict = {}
+    prompt += response1
 
-    for i, img_fname in enumerate(img_fnames):
-        img = Image.open(img_fname)
-        img.resize((336, 336))
-        imgByteArr = image_to_byte_array(img)
-        files[f"image_file_{i+1}"] = imgByteArr
+    prompt += "\nGiven the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
 
-    for i, img in enumerate(images):
-        img = Image.fromarray(np.array(img)).convert("RGB")
-        img.format = "PNG"
-        img.resize((336, 336))
-        files[f"image_file_{i+ 1+ len(img_fnames)}"] = image_to_byte_array(img)
+    response2 = llm(prompt)
 
-    return llm(prompt, images=files)
+    if "true" in response2.lower():
+        return response2, True
+    elif "false" in response2.lower():
+        return response2, False
+    else:
+        raise Exception(f"Unexpected response: {response2}")
 
 
 def llava_feedback(images: tuple, llm: LLaVA):
     prompt: str = f"""
-    system: In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table, 
-    in {DEFAULT_IMAGE_TOKEN} is the outcome. 
+    system: In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table,
+    in {DEFAULT_IMAGE_TOKEN} is the outcome.
 
-    goal: 
-        Describe the color and shape of the object starting with "object:". 
+    goal:
+        Describe the color and shape of the object starting with "object:".
         Describe the motion (most importantly direction in left, right, up, down) of the robot starting with "motion:".
         Keep all descriptions short and simple. Reply with nothing irrelevant.
 
@@ -188,7 +189,7 @@ def llava_feedback(images: tuple, llm: LLaVA):
     return llm(prompt, images=result)
 
 
-################################### DEBUG CODE
+# ################################# DEBUG CODE
 
 # images = obs["color"]
 # output = llava_feedback(images)
@@ -211,26 +212,6 @@ def llava_feedback(images: tuple, llm: LLaVA):
 
 # print(Image.fromarray(np.array(images[0])).convert("RGB").mode)
 ###################################
-
-
-def llava_test():
-    DEFAULT_IMAGE_TOKEN = "<image>"
-
-    def get_images(filenames: List[str]) -> Dict[str, Any]:
-        files = {}
-        for i, image_path in enumerate(image_paths):
-            with open(image_path, "rb") as img_file:
-                files[f"image_file_{i+1}"] = img_file.read()
-
-        return files
-
-    llm = LLaVA()
-
-    imgs = ["images_for_feedback/robot with alphabet blocks.png"]
-    # prompt = "Who do you think is the most handsome guy on the world?"
-    prompt = f"In the image {DEFAULT_IMAGE_TOKEN} are several objects on the table, describe the shape and color of the objects"
-    response = llm(prompt, imgs)
-    print(response)
 
 
 @hydra.main(config_path="./cfg", config_name="eval")
@@ -360,6 +341,9 @@ def main(vcfg):
                 obs_queue.append(obs["color"][0])
 
                 feedback = ""
+                # initialize the memory
+
+                memory = NaiveMemory(NaiveMemStorage(vcfg["memory_storage_dir"]))
 
                 for _ in range(task.max_steps):
                     act = agent.act(obs, info, goal)
@@ -375,8 +359,36 @@ def main(vcfg):
                         )
 
                     if vcfg["feedback"]:
-                        feedback = llava_few_shot_feedback(tuple(obs_queue), llm)
+                        # trasnform current_information in the memory
+
+                        obs_images = [
+                            Image.fromarray(np.array(obs)) for obs in obs_queue
+                        ]
+
+                        for img in obs_images:
+                            img.resize((336, 336))
+
+                        obs_images = [image_to_byte_array(img) for img in obs_images]
+
+                        curr_mem = (
+                            MemEntry(
+                                lang_goal,
+                                images=obs_images,
+                                task=vcfg["eval_task"],
+                            ),
+                        )
+
+                        feedback, success = llava_few_shot_feedback(
+                            curr_mem,
+                            llm,
+                            memory=memory,
+                        )
+
+                        curr_mem.success = success
+
                         feedback = feedback[:300] if len(feedback) < 200 else feedback
+
+                        memory.store(curr_mem)
 
                     # obs_queue.popleft();
                     total_reward += reward
@@ -391,7 +403,7 @@ def main(vcfg):
                     env.add_video_end_frame()
 
                 results.append((total_reward, info))
-                mean_reward = np.mean([r for r, i in results])
+                mean_reward = np.mean([r for r, _ in results])
                 print(f"Mean: {mean_reward} | Task: {task_name} | Ckpt: {ckpt}")
 
                 # End recording video

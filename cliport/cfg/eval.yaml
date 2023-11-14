@@ -21,6 +21,7 @@ checkpoint_type: 'val_missing'
 val_on_heldout: True
 
 feedback: True
+memory_storage_dir: /home/yang/memory_storage
 cli_img: True
 disp: False
 shared_memory: False
