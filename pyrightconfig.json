@@ -2,6 +2,7 @@
   "typeCheckingMode": "basic",
   "pythonPlatform": "Linux",
   "reportMissingImports": false,
+  "reportMissingModuleSource": false,
   "useLibraryCodeForTypes": true,
   "reportMissingTypeStubs": false,
   "reportGeneralTypeIssues": false,

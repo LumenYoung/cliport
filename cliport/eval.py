@@ -5,7 +5,9 @@ import os
 import json
 from thesisexp.memory.MemoryStorage import MemEntry, NaiveMemStorage
 from thesisexp.memory.Memory import NaiveMemory, BaseMemory
-from thesisexp.utils import transform_mem_to_prompt, add_image_to_file
+from thesisexp.utils import transform_mem_to_prompt, add_image_to_file, get_embedding_from_llava
+from thesisexp.prompt import BasePrompt
+from thesisexp.langchain_llava import LLaVA
 
 import numpy as np
 import hydra
@@ -21,7 +23,6 @@ from typing import Any, List, Optional, Dict, Tuple
 
 from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain.llms.base import LLM
-import requests
 
 from collections import deque
 
@@ -46,40 +47,6 @@ def array_to_image(array, filename):
 
     # Save the image
     img.save(filename)
-
-
-class LLaVA(LLM):
-    url: str = "http://experiment_env:6000/conversation"
-    StopStr: str = "<s>"
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-
-    @property
-    def _llm_type(self) -> str:
-        return "llava"
-
-    def _call(
-        self,
-        prompt: str,
-        images: Dict[str, bytes] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> str:
-        files = {name: (name, img, "image/png") for name, img in images.items()}
-        response = requests.post(self.url, files=files, data={"prompt": prompt})
-
-        # assert type(response) == str, f"Unexpected Behavior. Response is {type(response)}, not a string."
-        return response.json()
-
-    # def feedback(self, img):
-    #     prompt: str = f"""
-    #     In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table,
-    #     in {DEFAULT_IMAGE_TOKEN} is the outcome.
-    #     Describe the movement of the robot.
-    #     """
-
-    #     np.array(img)
 
 
 def image_to_byte_array(image: Image):
@@ -122,12 +89,13 @@ def llava_few_shot_feedback(
     current observation:
     {curr_prompt}
 
-    Describe whether the goal is achieved or not.
-    Reply with your reasoning and "goal: achieved" or "goal: not achieved".
-    Keep all descriptions short and simple.
+    Reply with your reasoning whether the goal is achieved or not.
+    Keep all descriptions short and relavant.
 
     answer:
     """
+
+    # discarded Describe whether the goal is achieved or not.
 
     response1 = llm(prompt, images=file)
 
@@ -367,15 +335,12 @@ def main(vcfg):
 
                         for img in obs_images:
                             img.resize((336, 336))
+                            img.format = "PNG"
 
-                        obs_images = [image_to_byte_array(img) for img in obs_images]
-
-                        curr_mem = (
-                            MemEntry(
-                                lang_goal,
-                                images=obs_images,
-                                task=vcfg["eval_task"],
-                            ),
+                        curr_mem = MemEntry(
+                            lang_goal,
+                            images=obs_images,
+                            task=vcfg["eval_task"],
                         )
 
                         feedback, success = llava_few_shot_feedback(
