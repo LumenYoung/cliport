@@ -5,7 +5,14 @@ import os
 import json
 from thesisexp.memory.MemoryStorage import MemEntry, NaiveMemStorage
 from thesisexp.memory.Memory import NaiveMemory, BaseMemory
-from thesisexp.utils import transform_mem_to_prompt, add_image_to_file, get_embedding_from_llava
+from thesisexp.utils import (
+    add_memory_into_collection,
+    transform_mem_to_prompt,
+    add_image_to_file,
+    get_embedding_from_llava,
+    get_query_from_memory,
+    unpack_result,
+)
 from thesisexp.prompt import BasePrompt
 from thesisexp.langchain_llava import LLaVA
 
@@ -25,6 +32,8 @@ from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain.llms.base import LLM
 
 from collections import deque
+import chromadb
+import logging
 
 
 DEFAULT_IMAGE_TOKEN = "<image>"
@@ -34,7 +43,7 @@ DEFAULT_IMAGE_TOKEN = "<image>"
 # -----------------------------------------------------------------------------
 
 
-def array_to_image(array, filename):
+def save_array_to_image(array, filename):
     """
     Convert a numpy array to an image and save it to a file.
 
@@ -311,9 +320,15 @@ def main(vcfg):
                 feedback = ""
                 # initialize the memory
 
-                memory = NaiveMemory(NaiveMemStorage(vcfg["memory_storage_dir"]))
+                # memory = NaiveMemory(NaiveMemStorage(vcfg["memory_storage_dir"]))
 
-                for _ in range(task.max_steps):
+                vec_store = chromadb.PersistentClient(path="./chroma_db")
+
+                collection_name = "primary"
+
+                chroma_collection = vec_store.get_or_create_collection(collection_name)
+
+                for i, _ in enumerate(range(task.max_steps)):
                     act = agent.act(obs, info, goal)
                     lang_goal = info["lang_goal"]
                     print(f"Lang Goal: {lang_goal}")
@@ -343,17 +358,62 @@ def main(vcfg):
                             task=vcfg["eval_task"],
                         )
 
-                        feedback, success = llava_few_shot_feedback(
-                            curr_mem,
-                            llm,
-                            memory=memory,
+                        embedding, metadata, prompt = get_query_from_memory(curr_mem)
+
+                        success_filter = {"success": {"$eq": True}}
+                        success_query = chroma_collection.query(
+                            query_embeddings=[embedding],
+                            where=success_filter,
+                            n_results=1,
                         )
+
+                        succ_metadata, _, _ = unpack_result(success_query)
+
+                        mem_succ = MemEntry.from_dict(succ_metadata)
+
+                        failure_filter = {"success": {"$eq": False}}
+                        failure_query = chroma_collection.query(
+                            query_embeddings=[embedding],
+                            where=failure_filter,
+                            n_results=1,
+                        )
+                        fail_metadata, _, _ = unpack_result(failure_query)
+
+                        mem_fail = MemEntry.from_dict(fail_metadata)
+
+                        prompt = BasePrompt(
+                            task=vcfg["eval_task"],
+                            memories=[mem_fail, mem_succ],
+                            curr_mem=curr_mem,
+                        )
+
+                        response: str = llm(**prompt.get_instruction_prompt())
+
+                        feedback = response[:300] if len(response) < 200 else response
+
+                        prompt.add_prompt(response)
+                        prompt.add_prompt(
+                            "Given the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
+                        )
+
+                        pmpt, images = 
+                        response: str = llm(**prompt.get_memory_prompt())
+
+                        success = False
+                        if "true" in response.lower():
+                            success = True
+                        elif "false" in response.lower():
+                            success = False
+                        else:
+                            raise Exception(f"Unexpected response: {response}")
 
                         curr_mem.success = success
 
-                        feedback = feedback[:300] if len(feedback) < 200 else feedback
+                        logging.info(
+                            f"Evaluation on step {i}: success {success}, reason: {feedback}"
+                        )
 
-                        memory.store(curr_mem)
+                        add_memory_into_collection(chroma_collection, curr_mem)
 
                     # obs_queue.popleft();
                     total_reward += reward
@@ -452,10 +512,4 @@ def list_ckpts_to_eval(vcfg, existing_results):
 if __name__ == "__main__":
     # llava_test()
 
-    # img_fn = "/home/yang/cliport/images_for_feedback/robot with alphabet blocks.png"
-    # img_fn = "/home/yang/cliport/images_for_feedback/robot with alphabet blocks.png"
-    #
-    # img = Image.open(img_fn)
-    # img1 = Image.open(img_fn)
-    # utils.display_image_in_cli([img,img1])
     main()
