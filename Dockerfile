@@ -10,9 +10,9 @@ RUN apt-key del A4B469963BF863C \
   && apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub \
   && apt-get update 
 
-  # && dpkg -i cuda-keyring_1.0-1_all.deb \
-  # apt-get install wget \
-  # && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb \
+# && dpkg -i cuda-keyring_1.0-1_all.deb \
+# apt-get install wget \
+# && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb \
 
 RUN apt-get install -y sudo wget
 RUN useradd -ms /bin/bash $USER_NAME
@@ -46,43 +46,55 @@ RUN sudo python3 -m pip install --upgrade pip
 
 # install pytorch
 RUN sudo pip3 install --no-input\
-   torch==1.9.1+cu111 \
-   torchvision==0.10.1+cu111 \
-   -f https://download.pytorch.org/whl/torch_stable.html
+  torch==1.9.1+cu111 \
+  torchvision==0.10.1+cu111 \
+  -f https://download.pytorch.org/whl/torch_stable.html
 
 # install GLX-Gears (for debugging)
 RUN apt-get update && apt-get install -y \
-   mesa-utils \
-   python3-setuptools \
-   python3-dev \
-   && rm -rf /var/lib/apt/lists/*
+  mesa-utils \
+  python3-setuptools \
+  python3-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN sudo pip3 install --no-input \
-   absl-py>=0.7.0  \
-   gym==0.17.3 \
-   pybullet>=3.0.4 \
-   matplotlib>=3.1.1 \
-   opencv-python>=4.1.2.30 \
-   meshcat>=0.0.18 \
-   scipy==1.4.1 \
-   scikit-image==0.17.2 \
-   pytorch_lightning==1.0.3 \
-   tdqm \
-   hydra-core==1.0.5 \
-   wandb \
-   transformers==4.3.2 \
-   kornia \
-   ftfy \
-   regex \
-   ffmpeg \
-   imageio-ffmpeg \
-   packaging==21.3 \
-   chafa.py \
-   langchain \
-   transforms3d 
+  absl-py>=0.7.0  \
+  gym==0.17.3 \
+  pybullet>=3.0.4 \
+  matplotlib>=3.1.1 \
+  opencv-python>=4.1.2.30 \
+  meshcat>=0.0.18 \
+  scipy==1.4.1 \
+  scikit-image==0.17.2 \
+  pytorch_lightning==1.0.3 \
+  tdqm \
+  hydra-core==1.0.5 \
+  wandb \
+  transformers==4.3.2 \
+  kornia \
+  ftfy \
+  regex \
+  ffmpeg \
+  imageio-ffmpeg \
+  packaging==21.3 \
+  chafa.py \
+  langchain \
+  transforms3d \
+  pysqlite3-binary
 
 RUN pip3 uninstall --no-input -y wandb \
   && pip3 install --no-input wandb
+
+# install newer sqlite3 that is required by chromadb
+
+RUN apt-get purge -y sqlite3
+
+RUN wget https://www.sqlite.org/2023/sqlite-autoconf-3440100.tar.gz \
+  && tar xf sqlite-autoconf-3440100.tar.gz \
+  && cd sqlite-autoconf-3440100 \
+  && ./configure && make \
+  && cp sqlite3 /usr/local/bin/
+
 
 # change ownership of everything to our user
 RUN mkdir -p /home/$USER_NAME/cliport
@@ -90,3 +102,6 @@ RUN cd /home/$USER_NAME/cliport && echo $(pwd) && chown $USER_NAME:$USER_NAME -R
 RUN echo "export CLIPORT_ROOT=~/cliport" >> /home/$USER_NAME/.bashrc
 RUN echo "export PYTHONPATH=$PYTHONPATH:~/cliport" >> /home/$USER_NAME/.bashrc
 RUN echo "cd cliport && python3 setup.py develop" >> /home/$USER_NAME/.bashrc
+
+
+
