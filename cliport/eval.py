@@ -361,6 +361,7 @@ def main(vcfg):
                         embedding, metadata, prompt = get_query_from_memory(curr_mem)
 
                         success_filter = {"success": {"$eq": True}}
+
                         success_query = chroma_collection.query(
                             query_embeddings=[embedding],
                             where=success_filter,
@@ -369,7 +370,9 @@ def main(vcfg):
 
                         succ_metadata, _, _ = unpack_result(success_query)
 
-                        mem_succ = MemEntry.from_dict(succ_metadata)
+                        mem_succ = None
+                        if succ_metadata is not None:
+                            mem_succ = MemEntry.from_dict(succ_metadata)
 
                         failure_filter = {"success": {"$eq": False}}
                         failure_query = chroma_collection.query(
@@ -379,7 +382,9 @@ def main(vcfg):
                         )
                         fail_metadata, _, _ = unpack_result(failure_query)
 
-                        mem_fail = MemEntry.from_dict(fail_metadata)
+                        mem_fail = None
+                        if fail_metadata is not None:
+                            mem_fail = MemEntry.from_dict(fail_metadata)
 
                         prompt = BasePrompt(
                             task=vcfg["eval_task"],
@@ -387,7 +392,9 @@ def main(vcfg):
                             curr_mem=curr_mem,
                         )
 
-                        response: str = llm(**prompt.get_instruction_prompt())
+                        response: str = llm(
+                            **prompt.get_instruction_prompt(compact_example=True)
+                        )
 
                         feedback = response[:300] if len(response) < 200 else response
 
@@ -396,7 +403,6 @@ def main(vcfg):
                             "Given the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
                         )
 
-                        pmpt, images = 
                         response: str = llm(**prompt.get_memory_prompt())
 
                         success = False
