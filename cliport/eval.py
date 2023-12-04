@@ -11,7 +11,7 @@ from thesisexp.utils import (
     add_image_to_file,
     get_embedding_from_llava,
     get_query_from_memory,
-    unpack_result,
+    unpack_query_result,
 )
 from thesisexp.prompt import BasePrompt
 from thesisexp.langchain_llava import LLaVA
@@ -324,7 +324,7 @@ def main(vcfg):
 
                 vec_store = chromadb.PersistentClient(path="./chroma_db")
 
-                collection_name = "primary"
+                collection_name = "first_selection"
 
                 chroma_collection = vec_store.get_or_create_collection(collection_name)
 
@@ -332,6 +332,76 @@ def main(vcfg):
                     act = agent.act(obs, info, goal)
                     lang_goal = info["lang_goal"]
                     print(f"Lang Goal: {lang_goal}")
+
+                    if vcfg["correction"]:
+                        obs_image = Image.fromarray(np.array(obs["color"][1]))
+                        obs_image.resize((336, 336))
+                        obs_image.format = "PNG"
+
+                        curr_mem = MemEntry(
+                            lang_goal, images=[obs_image], task=vcfg["eval_task"]
+                        )
+
+                        embedding, _, _ = get_query_from_memory(
+                            curr_mem, use_begin=True
+                        )
+
+                        filter_1 = {"success": {"$eq": True}}
+
+                        query_1 = chroma_collection.query(
+                            query_embeddings=[embedding],
+                            where=filter_1,
+                            n_results=1,
+                        )
+
+                        metadata_1, _, _, _ = unpack_query_result(query_1)
+
+                        mem_1 = None
+                        if metadata_1 is not None:
+                            mem_1 = MemEntry.from_dict(metadata_1)
+
+                        filter_2 = {"task": {"$eq": vcfg["eval_task"]}}
+                        query_2 = chroma_collection.query( query_embeddings=[embedding], n_results=1)
+
+                        metadata_2, _, _, _ = unpack_query_result(query_2)
+
+                        mem_2 = None
+                        if metadata_2 is not None:
+                            mem_2 = MemEntry.from_dict(metadata_2)
+
+                        prompt = BasePrompt(
+                            task=vcfg["eval_task"],
+                            memories=[mem_2, mem_1],
+                            curr_mem=curr_mem,
+                            goal="Given the above memory about it, determine if this language goal is going to successfully execute. Reply with 'true' or 'false'.",
+                            system_prompt="You are a robot agent doing table-top manipulation. You are trying to successfully accomplish the goal given your experiences. Different ways of giving language goal has different success rate.",
+                        )
+
+                        response: str = llm(
+                            **prompt.get_instruction_prompt( compact_example=True, compact_curr=True)
+                        )
+
+                        breakpoint()
+
+                        success = False
+                        if "true" in response.lower():
+                            success = True
+                        elif "false" in response.lower():
+                            success = False
+                        else:
+                            raise Exception(f"Unexpected response: {response}")
+
+                        if not success:
+                            prompt.add_prompt(
+                                "Given the current information, Response with the new language goal. Response:"
+                            )
+                        response: str = llm(
+                            **prompt.get_instruction_prompt(
+                                compact_curr=True, compact_example=True
+                            )
+                        )
+                        info["lang_goal"] = response
+
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
                     obs_queue.append(obs["color"][0])
 
@@ -358,37 +428,37 @@ def main(vcfg):
                             task=vcfg["eval_task"],
                         )
 
-                        embedding, metadata, prompt = get_query_from_memory(curr_mem)
+                        embedding, _, prompt = get_query_from_memory(curr_mem)
 
-                        success_filter = {"success": {"$eq": True}}
+                        filter_1 = {"success": {"$eq": True}}
 
-                        success_query = chroma_collection.query(
+                        query_1 = chroma_collection.query(
                             query_embeddings=[embedding],
-                            where=success_filter,
+                            where=filter_1,
                             n_results=1,
                         )
 
-                        succ_metadata, _, _ = unpack_result(success_query)
+                        metadata_1, _, _, _ = unpack_query_result(query_1)
 
-                        mem_succ = None
-                        if succ_metadata is not None:
-                            mem_succ = MemEntry.from_dict(succ_metadata)
+                        mem_1 = None
+                        if metadata_1 is not None:
+                            mem_1 = MemEntry.from_dict(metadata_1)
 
-                        failure_filter = {"success": {"$eq": False}}
-                        failure_query = chroma_collection.query(
+                        filter_2 = {"success": {"$eq": False}}
+                        query_2 = chroma_collection.query(
                             query_embeddings=[embedding],
-                            where=failure_filter,
+                            where=filter_2,
                             n_results=1,
                         )
-                        fail_metadata, _, _ = unpack_result(failure_query)
+                        metadata_2, _, _, _ = unpack_query_result(query_2)
 
-                        mem_fail = None
-                        if fail_metadata is not None:
-                            mem_fail = MemEntry.from_dict(fail_metadata)
+                        mem_2 = None
+                        if metadata_2 is not None:
+                            mem_2 = MemEntry.from_dict(metadata_2)
 
                         prompt = BasePrompt(
                             task=vcfg["eval_task"],
-                            memories=[mem_fail, mem_succ],
+                            memories=[mem_2, mem_1],
                             curr_mem=curr_mem,
                         )
 
@@ -403,7 +473,11 @@ def main(vcfg):
                             "Given the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
                         )
 
-                        response: str = llm(**prompt.get_memory_prompt())
+                        response: str = llm(
+                            **prompt.get_memory_prompt(
+                                compact_curr=vcfg["compact_curr_mem"]
+                            )
+                        )
 
                         success = False
                         if "true" in response.lower():
@@ -446,7 +520,12 @@ def main(vcfg):
                 "mean_reward": mean_reward,
             }
 
+        os.system(
+            f"echo 'now database has {chroma_collection.count()}' >> count_output.log"
+        )
+
         # Save results in a json file.
+
         if vcfg["save_results"]:
             # Load existing results
             if os.path.exists(save_json):
