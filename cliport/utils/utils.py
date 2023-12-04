@@ -37,6 +37,7 @@ import matplotlib.cm as cm
 # Image display utils
 # -----------------------------------------------------------------------------
 
+
 def matrix_to_heatmap_img(matrix) -> Image.Image:
     # normalize the matrix to range between 0 and 1
     normalized_matrix = (matrix - np.min(matrix)) / (np.max(matrix) - np.min(matrix))
@@ -145,7 +146,6 @@ def get_concat_h(im1, im2):
 @singledispatch
 def display_image_in_cli(img):
     aspect_ratio = img.width / img.height
-    breakpoint()
     config = chafa.CanvasConfig()
 
     config.height = 30
@@ -169,6 +169,7 @@ def _(img):
     if len(img) == 1:
         raise ValueError("Image list must have more than one image")
 
+    assert len(img) != 0
     for i in range(1, len(img)):
         new_img = get_concat_h(img[i - 1], img[i])
 
@@ -189,6 +190,7 @@ def _(img):
 
     output = canvas.print(fallback=True).decode()
     print(output)
+
 
 # -----------------------------------------------------------------------------
 # HEIGHTMAP UTILS
