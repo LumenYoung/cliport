@@ -12,6 +12,7 @@ from thesisexp.utils import (
     get_embedding_from_llava,
     get_query_from_memory,
     unpack_query_result,
+    unpack_query_results,
 )
 from thesisexp.prompt import BasePrompt
 from thesisexp.langchain_llava import LLaVA
@@ -33,6 +34,7 @@ from langchain.llms.base import LLM
 
 from collections import deque
 import chromadb
+from chromadb.api.models.Collection import Collection
 import logging
 
 
@@ -41,6 +43,47 @@ DEFAULT_IMAGE_TOKEN = "<image>"
 # -----------------------------------------------------------------------------
 # LLM communication utils
 # -----------------------------------------------------------------------------
+
+
+def get_memories(
+    n_mems: int,
+    embedding: List[float],
+    collection: Collection,
+    filters: List[Optional[Dict]],
+) -> List[Optional[MemEntry]]:
+    mems: List[Optional[MemEntry]] = []
+
+    for filter in filters:
+        query_result = collection.query(
+            query_embeddings=[embedding],
+            where=filter,
+            n_results=1,
+        )
+
+        metadata, _, _, _ = unpack_query_result(query_result)
+
+        mem = None
+        if metadata is not None:
+            mem = MemEntry.from_dict(metadata)
+
+        mems.append(mem)
+
+    if len(mems) != n_mems:
+        query_result = collection.query(
+            query_embeddings=[embedding],
+            n_results=n_mems - len(mems),
+        )
+
+        metadatas, _, _, _ = unpack_query_results(query_result)
+
+        for metadata in metadatas:
+            mem = None
+            if metadata is not None:
+                mem = MemEntry.from_dict(metadata)
+
+            mems.append(mem)
+
+    return mems
 
 
 def save_array_to_image(array, filename):
@@ -329,7 +372,6 @@ def main(vcfg):
                 chroma_collection = vec_store.get_or_create_collection(collection_name)
 
                 for i, _ in enumerate(range(task.max_steps)):
-                    act = agent.act(obs, info, goal)
                     lang_goal = info["lang_goal"]
                     print(f"Lang Goal: {lang_goal}")
 
@@ -346,61 +388,83 @@ def main(vcfg):
                             curr_mem, use_begin=True
                         )
 
-                        filter_1 = {"success": {"$eq": True}}
+                        filters: List[Dict] = [
+                            # {"success": True},
+                            # {"task": "block-insertion"},
+                            # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+                            {"task": {"$eq": vcfg["eval_task"]}},
+                            {"task": {"$ne": vcfg["eval_task"]}},
+                        ]
 
-                        query_1 = chroma_collection.query(
-                            query_embeddings=[embedding],
-                            where=filter_1,
-                            n_results=1,
+                        # while len(filters) < vcfg["correction_n_examples"]:
+                        #     filters.append(None)
+                        # filters = sorted(filters, key=lambda x: x is None)
+
+                        mems = get_memories(
+                            n_mems=vcfg["correction_n_examples"],
+                            embedding=embedding,
+                            collection=chroma_collection,
+                            filters=filters,
                         )
 
-                        metadata_1, _, _, _ = unpack_query_result(query_1)
-
-                        mem_1 = None
-                        if metadata_1 is not None:
-                            mem_1 = MemEntry.from_dict(metadata_1)
-
-                        filter_2 = {"task": {"$eq": vcfg["eval_task"]}}
-                        query_2 = chroma_collection.query( query_embeddings=[embedding], n_results=1)
-
-                        metadata_2, _, _, _ = unpack_query_result(query_2)
-
-                        mem_2 = None
-                        if metadata_2 is not None:
-                            mem_2 = MemEntry.from_dict(metadata_2)
+                        assert (
+                            len(mems) == vcfg["correction_n_examples"]
+                        ), "Unexpected lens of memories"
 
                         prompt = BasePrompt(
                             task=vcfg["eval_task"],
-                            memories=[mem_2, mem_1],
+                            memories=mems,
                             curr_mem=curr_mem,
-                            goal="Given the above memory about it, determine if this language goal is going to successfully execute. Reply with 'true' or 'false'.",
-                            system_prompt="You are a robot agent doing table-top manipulation. You are trying to successfully accomplish the goal given your experiences. Different ways of giving language goal has different success rate.",
+                            goal="Given the above memories, make a compact analyse if current instruction is going to achieve the goal.",
+                            system_prompt="You are a robot agent doing table-top manipulation. The language goal will be fed to a model with limited capability for execution and you are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
                         )
 
                         response: str = llm(
-                            **prompt.get_instruction_prompt( compact_example=True, compact_curr=True)
+                            **prompt.get_instruction_prompt(
+                                compact_example=True, compact_curr=True
+                            )
                         )
 
-                        breakpoint()
+                        prompt.add_prompt(response)
+
+                        prompt.add_prompt(
+                            "Given your reasoning, reply with 'true' if success or 'false' if it fails. Response:",
+                        )
+
+                        yes_response: str = llm(
+                            **prompt.get_instruction_prompt(
+                                compact_example=True, compact_curr=True
+                            )
+                        )
+
+                        prompt.add_prompt(yes_response)
+
+                        # prompt.get_instruction_prompt( compact_example=True, compact_curr=True)['prompt']
 
                         success = False
-                        if "true" in response.lower():
+                        if "true" in yes_response.lower():
                             success = True
-                        elif "false" in response.lower():
+                        elif "false" in yes_response.lower():
                             success = False
                         else:
                             raise Exception(f"Unexpected response: {response}")
 
                         if not success:
                             prompt.add_prompt(
-                                "Given the current information, Response with the new language goal. Response:"
+                                "Given the successful memories, response with a new instruction that is likely to success, adding color information or locational information might help. New instruction:"
                             )
-                        response: str = llm(
-                            **prompt.get_instruction_prompt(
-                                compact_curr=True, compact_example=True
+                            response: str = llm(
+                                **prompt.get_instruction_prompt(
+                                    no_image_in_example=True, compact_curr=True
+                                )
                             )
-                        )
-                        info["lang_goal"] = response
+                            # info["lang_goal"] = response
+
+                            env.task.lang_goals = [
+                                response
+                            ]  # TODO, too hacky, might need to clean it.
+
+                    act = agent.act(obs, info, goal)
 
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
                     obs_queue.append(obs["color"][0])
@@ -410,6 +474,84 @@ def main(vcfg):
                         utils.display_image_in_cli(
                             [Image.fromarray(np.array(obs)) for obs in list(obs_queue)]
                         )
+
+                    if vcfg["correction"]:
+                        obs_images = [
+                            Image.fromarray(np.array(obs)) for obs in obs_queue
+                        ]
+
+                        for img in obs_images:
+                            img.resize((336, 336))
+                            img.format = "PNG"
+
+                        curr_mem = MemEntry(
+                            info["lang_goal"],
+                            images=obs_images,
+                            task=vcfg["eval_task"],
+                        )
+
+                        prompt.curr_mem = curr_mem  # type: ignore
+
+                        embedding, _, _ = get_query_from_memory(
+                            curr_mem, use_begin=True
+                        )
+
+                        filters: List[Dict] = [
+                            # {"success": True},
+                            # {"task": "block-insertion"},
+                            # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+                            {"task": {"$eq": vcfg["eval_task"]}},
+                            {"task": {"$ne": vcfg["eval_task"]}},
+                        ]
+
+                        mems = get_memories(
+                            n_mems=vcfg["correction_n_examples"],
+                            embedding=embedding,
+                            collection=chroma_collection,
+                            filters=filters,
+                        )
+
+                        prompt = BasePrompt(
+                            task=vcfg["eval_task"],
+                            memories=mems,
+                            curr_mem=curr_mem,
+                            goal="Given the current observation and memories, determine if current execution achieves the goal. Reply with your reasoning. Response: ",
+                            system_prompt="You are a robot agent doing table-top manipulation. The language goal will be fed to a model with limited capability for execution and you are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
+                        )
+
+                        response: str = llm(
+                            **prompt.get_instruction_prompt(
+                                compact_example=True, compact_curr=False
+                            )
+                        )
+
+                        prompt.add_prompt(response)
+
+                        prompt.add_prompt(
+                            "Gien your reasoning, reply 'true' if success or 'false' if fails. Response: "
+                        )
+
+                        yes_response: str = llm(
+                            **prompt.get_instruction_prompt(
+                                no_image_in_example=True, compact_curr=False
+                            )
+                        )
+
+                        success = False
+                        if "true" in yes_response.lower():
+                            success = True
+                        elif "false" in yes_response.lower():
+                            success = False
+                        else:
+                            raise Exception(f"Unexpected response: {yes_response}")
+
+                        curr_mem.success = success
+
+                        logging.info(
+                            f"Evaluation on step {i}: success {success}, reason: {feedback}"
+                        )
+
+                        add_memory_into_collection(chroma_collection, curr_mem)
 
                     if vcfg["feedback"]:
                         # trasnform current_information in the memory
@@ -430,35 +572,22 @@ def main(vcfg):
 
                         embedding, _, prompt = get_query_from_memory(curr_mem)
 
-                        filter_1 = {"success": {"$eq": True}}
+                        filters: List[Dict] = [
+                            {"task": {"$eq": vcfg["eval_task"]}},
+                            {"task": {"$eq": vcfg["eval_task"]}},
+                            {"task": {"$ne": vcfg["eval_task"]}},
+                        ]
 
-                        query_1 = chroma_collection.query(
-                            query_embeddings=[embedding],
-                            where=filter_1,
-                            n_results=1,
+                        mems = get_memories(
+                            n_mems=vcfg["feedback_n_examples"],
+                            embedding=embedding,
+                            collection=chroma_collection,
+                            filters=filters,
                         )
-
-                        metadata_1, _, _, _ = unpack_query_result(query_1)
-
-                        mem_1 = None
-                        if metadata_1 is not None:
-                            mem_1 = MemEntry.from_dict(metadata_1)
-
-                        filter_2 = {"success": {"$eq": False}}
-                        query_2 = chroma_collection.query(
-                            query_embeddings=[embedding],
-                            where=filter_2,
-                            n_results=1,
-                        )
-                        metadata_2, _, _, _ = unpack_query_result(query_2)
-
-                        mem_2 = None
-                        if metadata_2 is not None:
-                            mem_2 = MemEntry.from_dict(metadata_2)
 
                         prompt = BasePrompt(
                             task=vcfg["eval_task"],
-                            memories=[mem_2, mem_1],
+                            memories=mems,
                             curr_mem=curr_mem,
                         )
 
@@ -504,6 +633,7 @@ def main(vcfg):
                         break
 
                 # handle the last frame if max_steps is reached
+
                 if env.last_frame is not None:
                     env.add_video_end_frame()
 
