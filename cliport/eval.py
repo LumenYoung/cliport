@@ -328,6 +328,7 @@ def main(vcfg):
 
         log_dict = None
         log_file = None
+
         if vcfg["compare_logging"]:
             log_dict: Dict = {}
 
@@ -338,8 +339,10 @@ def main(vcfg):
                 if vcfg["correction"]
                 else "",
                 "correction_feedback" if vcfg["correction_feedback"] else "",
-                f"{vcfg['n_repeat']}_repeats",
+                f"{vcfg['n_demo']}_demos",
             ]
+
+            name_suffixs = [s for s in name_suffixs if s != ""]
 
             log_filename: str = "-".join(name_suffixs) + ".json"
 
