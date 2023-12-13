@@ -45,6 +45,19 @@ DEFAULT_IMAGE_TOKEN = "<image>"
 # -----------------------------------------------------------------------------
 
 
+def extract_instruction_from_response(response: str) -> str:
+    # remove all before ":" smybol, including ":" and all after "." if exists
+    # response = response.split(":")[1].split(".")[0]
+
+    if ":" in response:
+        response = response.split(":")[1]
+
+    if "." in response:
+        response = response.split(".")[0]
+
+    return response
+
+
 def get_memories(
     n_mems: int,
     embedding: List[float],
