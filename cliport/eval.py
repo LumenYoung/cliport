@@ -367,7 +367,7 @@ def main(vcfg):
 
                 vec_store = chromadb.PersistentClient(path="./chroma_db")
 
-                collection_name = "first_selection"
+                collection_name = "primary"
 
                 chroma_collection = vec_store.get_or_create_collection(collection_name)
 
