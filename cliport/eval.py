@@ -340,6 +340,7 @@ def main(vcfg):
                 else "",
                 "correction_feedback" if vcfg["correction_feedback"] else "",
                 f"{vcfg['n_demo']}_demos",
+                time.strftime("%Y-%m-%d", time.localtime()),
             ]
 
             name_suffixs = [s for s in name_suffixs if s != ""]
@@ -353,11 +354,12 @@ def main(vcfg):
                 "%Y-%m-%d %H:%M:%S", time.localtime()
             )
 
-            log_dict["eval_task"] = vcfg["eval_task"]
             log_dict["feedback"] = vcfg["feedback"]
             log_dict["correction"] = vcfg["correction"]
             log_dict["correction_feedback"] = vcfg["correction_feedback"]
             log_dict["correction_n_examples"] = vcfg["correction_n_examples"]
+            log_dict["feedback_n_examples"] = vcfg["feedback_n_examples"]
+            log_dict["compact_curr_mem"] = vcfg["compact_curr_mem"]
 
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
@@ -418,9 +420,14 @@ def main(vcfg):
 
                 vec_store = chromadb.PersistentClient(path="./chroma_db")
 
-                collection_name = "primary"
+                collection_name = "first_selection"
 
                 chroma_collection = vec_store.get_or_create_collection(collection_name)
+
+                if vcfg["compare_logging"]:
+                    assert epoch_log_dict is not None, "epoch_log_dict is None"
+                    epoch_log_dict["num_mem"] = chroma_collection.count()
+                    epoch_log_dict["vb_name"] = collection_name
 
                 for i, _ in enumerate(range(task.max_steps)):
                     lang_goal = info["lang_goal"]
