@@ -652,10 +652,6 @@ def main(vcfg):
                 "mean_reward": mean_reward,
             }
 
-        os.system(
-            f"echo 'now database has {chroma_collection.count()}' >> count_output.log"
-        )
-
         # Save results in a json file.
 
         if vcfg["save_results"]:
