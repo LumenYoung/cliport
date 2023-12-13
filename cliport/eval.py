@@ -401,9 +401,13 @@ def main(vcfg):
                         filters: List[Dict] = [
                             # {"success": True},
                             # {"task": "block-insertion"},
-                            # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-                            {"task": {"$eq": vcfg["eval_task"]}},
+                            # {"task": {"$eq": vcfg["eval_task"]}},
                             {"task": {"$ne": vcfg["eval_task"]}},
+                            {"task": vcfg["eval_task"]},
+                            {"task": vcfg["eval_task"]},
+                            # {"$and": [{"task": vcfg["eval_task"]}]},
+                            # {"task": {"$eq": "block-insertion"}},
+                            # {"task": {"$eq": "block-insertion"}},
                         ]
 
                         # while len(filters) < vcfg["correction_n_examples"]:
