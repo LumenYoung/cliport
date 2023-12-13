@@ -477,7 +477,7 @@ def main(vcfg):
                             [Image.fromarray(np.array(obs)) for obs in list(obs_queue)]
                         )
 
-                    if vcfg["correction"]:
+                    if vcfg["correction_feedback"]:
                         obs_images = [
                             Image.fromarray(np.array(obs)) for obs in obs_queue
                         ]
