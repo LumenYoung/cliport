@@ -429,8 +429,8 @@ def main(vcfg):
                             task=vcfg["eval_task"],
                             memories=mems,
                             curr_mem=curr_mem,
-                            goal="Given the above memories, make a compact analyse if current instruction is going to achieve the goal.",
-                            system_prompt="You are a robot agent doing table-top manipulation. The language goal will be fed to a model with limited capability for execution and you are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
+                            goal="Given the above memories, our compact analyse if current instruction is going to achieve the goal is ",
+                            system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
                         )
 
                         response: str = llm(
@@ -440,43 +440,31 @@ def main(vcfg):
                         )
 
                         prompt.add_prompt(response)
-
-                        prompt.add_prompt(
-                            "Given your reasoning, reply with 'true' if success or 'false' if it fails. Response:",
-                        )
-
-                        yes_response: str = llm(
-                            **prompt.get_instruction_prompt(
-                                compact_example=True, compact_curr=True
-                            )
-                        )
-
-                        prompt.add_prompt(yes_response)
-
                         # prompt.get_instruction_prompt( compact_example=True, compact_curr=True)['prompt']
 
-                        success = False
-                        if "true" in yes_response.lower():
-                            success = True
-                        elif "false" in yes_response.lower():
-                            success = False
-                        else:
-                            raise Exception(f"Unexpected response: {response}")
+                        prompt.add_prompt(
+                            "A new instruction that is likely to success by adding color information or locational information, or we don't need to add anything. Given the successful memories, we use this instruction: "
+                        )
 
-                        if not success:
-                            prompt.add_prompt(
-                                "Given the successful memories, response with a new instruction that is likely to success, adding color information or locational information might help. New instruction:"
+                        response: str = llm(
+                            **prompt.get_instruction_prompt(
+                                no_image_in_example=True, compact_curr=True
                             )
-                            response: str = llm(
-                                **prompt.get_instruction_prompt(
-                                    no_image_in_example=True, compact_curr=True
-                                )
-                            )
-                            # info["lang_goal"] = response
+                        )
 
-                            env.task.lang_goals = [
-                                response
-                            ]  # TODO, too hacky, might need to clean it.
+                        extracted_lang_goal = extract_instruction_from_response(
+                            response
+                        )
+
+                        # response_instruction: str = llm(
+                        #     f"extract the instruction and ignore any other parts from this respones, reply with only the response: {response}"
+                        # )
+
+                        env.task.lang_goals[
+                            0
+                        ] = extracted_lang_goal  # TODO, too hacky, might need to clean it.
+
+                        info["lang_goal"] = env.task.lang_goals[0]
 
                     act = agent.act(obs, info, goal)
 
@@ -529,7 +517,7 @@ def main(vcfg):
                             task=vcfg["eval_task"],
                             memories=mems,
                             curr_mem=curr_mem,
-                            goal="Given the current observation and memories, determine if current execution achieves the goal. Reply with your reasoning. Response: ",
+                            goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location and ignore the change of the robot arm. Reply with your reasoning. Response: ",
                             system_prompt="You are a robot agent doing table-top manipulation. The language goal will be fed to a model with limited capability for execution and you are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
                         )
 
