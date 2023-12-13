@@ -27,10 +27,7 @@ from cliport.environments.environment import Environment
 
 from PIL import Image
 
-from typing import Any, List, Optional, Dict, Tuple
-
-from langchain.callbacks.manager import CallbackManagerForLLMRun
-from langchain.llms.base import LLM
+from typing import List, Optional, Dict, Tuple
 
 from collections import deque
 import chromadb
