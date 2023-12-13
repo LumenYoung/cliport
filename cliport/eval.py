@@ -33,6 +33,9 @@ from collections import deque
 import chromadb
 from chromadb.api.models.Collection import Collection
 import logging
+import orjson
+
+import time
 
 
 DEFAULT_IMAGE_TOKEN = "<image>"
@@ -323,6 +326,36 @@ def main(vcfg):
         results = []
         mean_reward = 0.0
 
+        log_dict = None
+        log_file = None
+        if vcfg["compare_logging"]:
+            log_dict: Dict = {}
+
+            name_suffixs: List[str] = [
+                vcfg["eval_task"],
+                "feedback" if vcfg["feedback"] else "",
+                f"correction_{vcfg['correction_n_examples']}examples"
+                if vcfg["correction"]
+                else "",
+                "correction_feedback" if vcfg["correction_feedback"] else "",
+                f"{vcfg['n_repeat']}_repeats",
+            ]
+
+            log_filename: str = "-".join(name_suffixs) + ".json"
+
+            log_file = os.path.join(vcfg["compare_logging_path"], log_filename)
+
+            log_dict["task"] = vcfg["eval_task"]
+            log_dict["start_time"] = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime()
+            )
+
+            log_dict["eval_task"] = vcfg["eval_task"]
+            log_dict["feedback"] = vcfg["feedback"]
+            log_dict["correction"] = vcfg["correction"]
+            log_dict["correction_feedback"] = vcfg["correction_feedback"]
+            log_dict["correction_n_examples"] = vcfg["correction_n_examples"]
+
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
             # Initialize agent.
@@ -360,6 +393,11 @@ def main(vcfg):
                 info = env.info
                 reward = 0
 
+                epoch_log_dict = None
+                if vcfg["compare_logging"]:
+                    log_dict[f"epoch_{i}"] = {}
+                    epoch_log_dict = log_dict[f"epoch_{i}"]
+
                 # Start recording video (NOTE: super slow)
                 if record:
                     video_name = f"{task_name}-{i+1:06d}"
@@ -383,6 +421,7 @@ def main(vcfg):
 
                 for i, _ in enumerate(range(task.max_steps)):
                     lang_goal = info["lang_goal"]
+
                     print(f"Lang Goal: {lang_goal}")
 
                     if vcfg["correction"]:
@@ -471,6 +510,16 @@ def main(vcfg):
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
                     obs_queue.append(obs["color"][0])
 
+                    if vcfg["compare_logging"]:
+                        assert epoch_log_dict is not None, "epoch_log_dict is None"
+
+                        epoch_log_dict[f"step_{i}"] = {}
+                        step_log_dict = epoch_log_dict[f"step_{i}"]
+
+                        step_log_dict["reward"] = reward
+                        step_log_dict["done"] = done
+                        step_log_dict["lang_goal"] = info["lang_goal"]
+
                     # display current observation in cli
                     if vcfg["cli_img"]:
                         utils.display_image_in_cli(
@@ -503,6 +552,7 @@ def main(vcfg):
                             # {"task": "block-insertion"},
                             # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
                             {"task": {"$eq": vcfg["eval_task"]}},
+                            {"task": {"$ne": vcfg["eval_task"]}},
                             {"task": {"$ne": vcfg["eval_task"]}},
                         ]
 
@@ -633,11 +683,14 @@ def main(vcfg):
                         env.add_video_end_frame()
                         env.last_frame = None
                         break
-
                 # handle the last frame if max_steps is reached
 
                 if env.last_frame is not None:
                     env.add_video_end_frame()
+
+                if vcfg["compare_logging"]:
+                    assert epoch_log_dict is not None, "epoch_log_dict is None"
+                    epoch_log_dict["total_reward"] = total_reward
 
                 results.append((total_reward, info))
                 mean_reward = np.mean([r for r, _ in results])
@@ -653,6 +706,12 @@ def main(vcfg):
             }
 
         # Save results in a json file.
+        if vcfg["compare_logging"]:
+            assert log_dict is not None, "log_dict is None, unexpected"
+            assert log_file is not None, "log_file is None, unexpected"
+
+            with open(log_file, "wb") as f:
+                f.write(orjson.dumps(log_dict) + b"\n")
 
         if vcfg["save_results"]:
             # Load existing results
