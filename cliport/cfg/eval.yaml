@@ -20,12 +20,16 @@ update_results: False # overwrite existing json results?
 checkpoint_type: 'val_missing'
 val_on_heldout: True
 
-feedback: True
+feedback: False
 compact_curr_mem: False
 feedback_n_examples: 3
 
 correction: False
-correction_n_examples: 2
+correction_feedback: False
+correction_n_examples: 3
+
+compare_logging: True
+compare_logging_path: "/home/yang/cliport/logs"
 
 memory_storage_dir: /home/yang/memory_storage
 cli_img: False
