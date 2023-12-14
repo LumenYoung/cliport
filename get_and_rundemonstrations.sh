@@ -137,7 +137,7 @@ function run_cliport() {
 function get_and_run_cliport_controled() {
   local eval_task=$1
 
-  python3 cliport/demos.py n=10 \
+  python3 cliport/demos.py n=100 \
                           task=${eval_task} \
                           mode=test
 
@@ -145,7 +145,7 @@ function get_and_run_cliport_controled() {
                          model_task=multi-language-conditioned \
                          agent=cliport \
                          mode=test \
-                         n_demos=10 \
+                         n_demos=100 \
                          train_demos=1000 \
                          exp_folder=cliport_quickstart \
                          checkpoint_type=test_best \
@@ -160,7 +160,7 @@ function run_cliport_controled() {
                          model_task=multi-language-conditioned \
                          agent=cliport \
                          mode=test \
-                         n_demos=5 \
+                         n_demos=50 \
                          train_demos=1000 \
                          exp_folder=cliport_controled_exp \
                          checkpoint_type=test_best \
@@ -199,14 +199,14 @@ task_names=("palletizing-boxes")
 
 task_names=("assembling-kits-seq-full")
 
-task_names=("block-insertion")
-
 task_names=("towers-of-hanoi-seq-full")
+
+task_names=("block-insertion", "palletizing-boxes")
 
 # Loop over the array
 for task in "${task_names[@]}"
 do
   # run_cliport $task
-  run_cliport_controled $task
-  # get_and_run_cliport_controled $task
+  # run_cliport_controled $task
+  get_and_run_cliport_controled $task
 done
