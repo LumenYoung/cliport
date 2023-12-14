@@ -26,6 +26,7 @@ feedback_n_examples: 3
 
 correction: False
 correction_feedback: False
+correction_feedback_use_gt_label: True
 correction_n_examples: 3
 
 compare_logging: True

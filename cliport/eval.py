@@ -339,7 +339,7 @@ def main(vcfg):
                 if vcfg["correction"]
                 else "",
                 "correction_feedback" if vcfg["correction_feedback"] else "",
-                f"{vcfg['n_demo']}_demos",
+                f"{vcfg['n_demos']}_demos",
                 time.strftime("%Y-%m-%d", time.localtime()),
             ]
 
@@ -448,15 +448,9 @@ def main(vcfg):
                         )
 
                         filters: List[Dict] = [
-                            # {"success": True},
-                            # {"task": "block-insertion"},
-                            # {"task": {"$eq": vcfg["eval_task"]}},
                             {"task": {"$ne": vcfg["eval_task"]}},
                             {"task": vcfg["eval_task"]},
                             {"task": vcfg["eval_task"]},
-                            # {"$and": [{"task": vcfg["eval_task"]}]},
-                            # {"task": {"$eq": "block-insertion"}},
-                            # {"task": {"$eq": "block-insertion"}},
                         ]
 
                         # while len(filters) < vcfg["correction_n_examples"]:
@@ -520,6 +514,7 @@ def main(vcfg):
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
                     obs_queue.append(obs["color"][0])
 
+                    step_log_dict = None
                     if vcfg["compare_logging"]:
                         assert epoch_log_dict is not None, "epoch_log_dict is None"
 
@@ -599,15 +594,35 @@ def main(vcfg):
                             )
                         )
 
+                        while (
+                            "true" not in yes_response.lower()
+                            and "false" not in yes_response.lower()
+                        ):
+                            yes_response: str = llm(
+                                **prompt.get_instruction_prompt(
+                                    no_image_in_example=True, compact_curr=False
+                                )
+                            )
+
                         success = False
                         if "true" in yes_response.lower():
                             success = True
                         elif "false" in yes_response.lower():
                             success = False
-                        else:
-                            raise Exception(f"Unexpected response: {yes_response}")
 
                         curr_mem.success = success
+
+                        if (
+                            vcfg["correction_feedback_use_gt_label"]
+                            and vcfg["compare_logging"]
+                        ):
+                            curr_mem.success = True if reward > 0 else False
+
+                            assert step_log_dict is not None, "step_log_dict is None"
+
+                            step_log_dict["correct_prediction"] = (
+                                True if success == curr_mem.success else False
+                            )
 
                         logging.info(
                             f"Evaluation on step {i}: success {success}, reason: {feedback}"
