@@ -440,7 +440,10 @@ def main(vcfg):
                         obs_image.format = "PNG"
 
                         curr_mem = MemEntry(
-                            lang_goal, images=[obs_image], task=vcfg["eval_task"]
+                            lang_goal,
+                            instruction=lang_goal,
+                            images=[obs_image],
+                            task=vcfg["eval_task"],
                         )
 
                         embedding, _, _ = get_query_from_memory(
@@ -542,6 +545,7 @@ def main(vcfg):
 
                         curr_mem = MemEntry(
                             info["lang_goal"],
+                            instruction=info["lang_goal"],
                             images=obs_images,
                             task=vcfg["eval_task"],
                         )
@@ -643,6 +647,7 @@ def main(vcfg):
 
                         curr_mem = MemEntry(
                             lang_goal,
+                            instruction=lang_goal,
                             images=obs_images,
                             task=vcfg["eval_task"],
                         )
@@ -679,19 +684,27 @@ def main(vcfg):
                             "Given the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
                         )
 
-                        response: str = llm(
+                        yes_response: str = llm(
                             **prompt.get_memory_prompt(
                                 compact_curr=vcfg["compact_curr_mem"]
                             )
                         )
 
+                        while (
+                            "true" not in yes_response.lower()
+                            and "false" not in yes_response.lower()
+                        ):
+                            yes_response: str = llm(
+                                **prompt.get_instruction_prompt(
+                                    no_image_in_example=True, compact_curr=False
+                                )
+                            )
+
                         success = False
-                        if "true" in response.lower():
+                        if "true" in yes_response.lower():
                             success = True
-                        elif "false" in response.lower():
+                        elif "false" in yes_response.lower():
                             success = False
-                        else:
-                            raise Exception(f"Unexpected response: {response}")
 
                         curr_mem.success = success
 
@@ -701,7 +714,6 @@ def main(vcfg):
 
                         add_memory_into_collection(chroma_collection, curr_mem)
 
-                    # obs_queue.popleft();
                     total_reward += reward
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
                     if done:
