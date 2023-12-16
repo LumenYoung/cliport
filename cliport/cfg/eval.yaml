@@ -24,10 +24,11 @@ feedback: False
 compact_curr_mem: False
 feedback_n_examples: 3
 
-correction: False
+correction: True
 correction_feedback: False
 correction_feedback_use_gt_label: True
 correction_n_examples: 3
+correction_judge_n_examples: 8
 
 compare_logging: True
 compare_logging_path: "/home/yang/cliport/logs"

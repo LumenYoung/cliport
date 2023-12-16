@@ -448,66 +448,91 @@ def main(vcfg):
                         )
 
                         filters: List[Dict] = [
-                            {"task": {"$ne": vcfg["eval_task"]}},
                             {"task": vcfg["eval_task"]},
                             {"task": vcfg["eval_task"]},
                         ]
 
-                        # while len(filters) < vcfg["correction_n_examples"]:
-                        #     filters.append(None)
-                        # filters = sorted(filters, key=lambda x: x is None)
+                        filters = []
 
-                        mems = get_memories(
+                        judge_filters: List[Dict] = []
+                        for i in range(vcfg["correction_judge_n_examples"]):
+                            judge_filters.append({"task": vcfg["eval_task"]})
+
+                        judge_mems = get_memories(
                             n_mems=vcfg["correction_n_examples"],
                             embedding=embedding,
                             collection=chroma_collection,
                             filters=filters,
                         )
 
-                        assert (
-                            len(mems) == vcfg["correction_n_examples"]
-                        ), "Unexpected lens of memories"
+                        count_success = 0
+                        for mem in judge_mems:
+                            if mem is None:
+                                continue
+                            count_success += 1 if mem.success else 0
 
-                        prompt = BasePrompt(
-                            task=vcfg["eval_task"],
-                            memories=mems,
-                            curr_mem=curr_mem,
-                            goal="Given the above memories, our compact analyse if current instruction is going to achieve the goal is ",
-                            system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
+                        success_rate = (
+                            count_success / vcfg["correction_judge_n_examples"]
                         )
 
-                        response: str = llm(
-                            **prompt.get_instruction_prompt(
-                                compact_example=True, compact_curr=True
+                        goal_str = ""
+                        if success_rate > 0.8:
+                            goal_str = "Given the memory, this instruction is likely to success"
+                        if success_rate < 0.2:
+                            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. Therefore we instead use this modified instruction: "
+                        else:
+                            goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+
+                        # while len(filters) < vcfg["correction_n_examples"]:
+                        #     filters.append(None)
+                        # filters = sorted(filters, key=lambda x: x is None)
+
+                        if not success_rate > 0.8:
+                            mems = get_memories(
+                                n_mems=vcfg["correction_n_examples"],
+                                embedding=embedding,
+                                collection=chroma_collection,
+                                filters=filters,
                             )
-                        )
 
-                        prompt.add_prompt(response)
-                        # prompt.get_instruction_prompt( compact_example=True, compact_curr=True)['prompt']
+                            assert (
+                                len(mems) == vcfg["correction_n_examples"]
+                            ), "Unexpected lens of memories"
 
-                        prompt.add_prompt(
-                            "A new instruction that is likely to success by adding color information or locational information, or we don't need to add anything. Given the successful memories, we use this instruction: "
-                        )
-
-                        response: str = llm(
-                            **prompt.get_instruction_prompt(
-                                no_image_in_example=True, compact_curr=True
+                            prompt = BasePrompt(
+                                task=vcfg["eval_task"],
+                                memories=mems,
+                                curr_mem=curr_mem,
+                                goal=goal_str,
+                                system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
                             )
-                        )
 
-                        extracted_lang_goal = extract_instruction_from_response(
-                            response
-                        )
+                            response: str = llm(
+                                **prompt.get_instruction_prompt(
+                                    compact_example=True, compact_curr=True
+                                )
+                            )
 
-                        # response_instruction: str = llm(
-                        #     f"extract the instruction and ignore any other parts from this respones, reply with only the response: {response}"
-                        # )
+                            # prompt.add_prompt(response)
+                            # # prompt.get_instruction_prompt( compact_example=True, compact_curr=True)['prompt']
 
-                        env.task.lang_goals[
-                            0
-                        ] = extracted_lang_goal  # TODO, too hacky, might need to clean it.
+                            # prompt.add_prompt(
+                            #     "A new instruction that is likely to success by adding color information or locational information, or we don't need to add anything. Given the successful memories, we use this instruction: "
+                            # )
+                            # response: str = llm(
+                            #     **prompt.get_instruction_prompt(
+                            #         no_image_in_example=True, compact_curr=True
+                            #     )
+                            # )
 
-                        info["lang_goal"] = env.task.lang_goals[0]
+                            extracted_lang_goal = extract_instruction_from_response(
+                                response
+                            )
+
+                            env.task.lang_goals[0] = extracted_lang_goal
+
+                            info["lang_goal"] = env.task.lang_goals[0]
+                            breakpoint()
 
                     act = agent.act(obs, info, goal)
 
@@ -521,9 +546,23 @@ def main(vcfg):
                         epoch_log_dict[f"step_{i}"] = {}
                         step_log_dict = epoch_log_dict[f"step_{i}"]
 
-                        step_log_dict["reward"] = reward
-                        step_log_dict["done"] = done
+                        if isinstance(reward, np.float64):
+                            step_log_dict["reward"] = reward.item()
+                        else:
+                            step_log_dict["reward"] = reward
+
+                        if isinstance(done, np.bool_):
+                            step_log_dict["done"] = done.item()
+                        else:
+                            step_log_dict["done"] = done
+
                         step_log_dict["lang_goal"] = info["lang_goal"]
+
+                        assert log_dict is not None, "log_dict is None, unexpected"
+                        assert log_file is not None, "log_file is None, unexpected"
+
+                        with open(log_file, "wb") as f:
+                            f.write(orjson.dumps(log_dict) + b"\n")
 
                     # display current observation in cli
                     if vcfg["cli_img"]:
@@ -715,7 +754,11 @@ def main(vcfg):
 
                 if vcfg["compare_logging"]:
                     assert epoch_log_dict is not None, "epoch_log_dict is None"
-                    epoch_log_dict["total_reward"] = total_reward
+
+                    if isinstance(total_reward, np.float64):
+                        epoch_log_dict["total_reward"] = total_reward.item()
+                    else:
+                        epoch_log_dict["total_reward"] = total_reward
 
                 results.append((total_reward, info))
                 mean_reward = np.mean([r for r, _ in results])
