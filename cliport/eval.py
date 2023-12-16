@@ -35,6 +35,8 @@ from chromadb.api.models.Collection import Collection
 import logging
 import orjson
 
+import random
+
 import time
 
 
@@ -62,26 +64,35 @@ def get_memories(
     n_mems: int,
     embedding: List[float],
     collection: Collection,
-    filters: List[Optional[Dict]],
+    filters: List[Tuple[int, Optional[Dict]]],
+    sample: bool = True,
 ) -> List[Optional[MemEntry]]:
     mems: List[Optional[MemEntry]] = []
 
-    for filter in filters:
+    for num, filter in filters:
+        get_num = num
+        if sample:
+            get_num *= 2
         query_result = collection.query(
             query_embeddings=[embedding],
             where=filter,
-            n_results=1,
+            n_results=get_num,
         )
 
-        metadata, _, _, _ = unpack_query_result(query_result)
+        if query_result["metadatas"] is None:
+            continue
 
-        mem = None
-        if metadata is not None:
-            mem = MemEntry.from_dict(metadata)
+        metadatas = query_result["metadatas"][0]
 
-        mems.append(mem)
+        for metadatas in metadatas:
+            if metadatas is None:
+                continue
+            mem = MemEntry.from_dict(metadatas)
+            mems.append(mem)
 
-    if len(mems) != n_mems:
+        mems = random.sample(mems, num)
+
+    if len(mems) < n_mems:
         query_result = collection.query(
             query_embeddings=[embedding],
             n_results=n_mems - len(mems),
@@ -95,6 +106,9 @@ def get_memories(
                 mem = MemEntry.from_dict(metadata)
 
             mems.append(mem)
+
+    elif len(mems) > n_mems:
+        mems = mems[:n_mems]
 
     return mems
 
@@ -447,22 +461,27 @@ def main(vcfg):
                             curr_mem, use_begin=True
                         )
 
-                        filters: List[Dict] = [
-                            {"task": vcfg["eval_task"]},
-                            {"task": vcfg["eval_task"]},
-                        ]
+                        # filters: List[Tuple[int, Optional[Dict]]] = [
+                        #     {"task": vcfg["eval_task"]},
+                        #     {"task": vcfg["eval_task"]},
+                        # ]
 
-                        filters = []
+                        filters: List[Tuple[int, Optional[Dict]]] = []
 
-                        judge_filters: List[Dict] = []
-                        for i in range(vcfg["correction_judge_n_examples"]):
-                            judge_filters.append({"task": vcfg["eval_task"]})
+                        judge_filters: List[Tuple[int, Optional[Dict]]] = []
+
+                        judge_filters.append(
+                            (
+                                vcfg["correction_judge_n_examples"],
+                                {"task": vcfg["eval_task"]},
+                            )
+                        )
 
                         judge_mems = get_memories(
                             n_mems=vcfg["correction_n_examples"],
                             embedding=embedding,
                             collection=chroma_collection,
-                            filters=filters,
+                            filters=judge_filters,
                         )
 
                         count_success = 0
@@ -478,10 +497,27 @@ def main(vcfg):
                         goal_str = ""
                         if success_rate > 0.8:
                             goal_str = "Given the memory, this instruction is likely to success"
-                        if success_rate < 0.2:
+                        if success_rate < 0.4:
                             goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. Therefore we instead use this modified instruction: "
+
+                            filters = [
+                                (
+                                    vcfg["correction_n_examples"],
+                                    {"task": {"$ne": vcfg["eval_task"]}},
+                                )
+                            ]
                         else:
                             goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+                            filters = [
+                                (
+                                    2 * vcfg["correction_n_examples"] // 3,
+                                    {"task": {"$ne": vcfg["eval_task"]}},
+                                ),
+                                (
+                                    vcfg["correction_n_examples"] // 3,
+                                    {"task": {"$eq": vcfg["eval_task"]}},
+                                ),
+                            ]
 
                         # while len(filters) < vcfg["correction_n_examples"]:
                         #     filters.append(None)
@@ -507,9 +543,15 @@ def main(vcfg):
                                 system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
                             )
 
+                            # response: str = llm(
+                            #     **prompt.get_instruction_prompt(
+                            #         compact_example=True, compact_curr=True
+                            #     )
+                            # )
+
                             response: str = llm(
                                 **prompt.get_instruction_prompt(
-                                    compact_example=True, compact_curr=True
+                                    no_image_in_example=True, compact_curr=True
                                 )
                             )
 
@@ -532,7 +574,6 @@ def main(vcfg):
                             env.task.lang_goals[0] = extracted_lang_goal
 
                             info["lang_goal"] = env.task.lang_goals[0]
-                            breakpoint()
 
                     act = agent.act(obs, info, goal)
 
