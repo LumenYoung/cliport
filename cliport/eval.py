@@ -126,7 +126,8 @@ def get_memories(
             mem = MemEntry.from_dict(metadatas)
             mems.append(mem)
 
-        mems = random.sample(mems, num)
+        if len(mems) > num:
+            mems = random.sample(mems, num)
 
     if len(mems) < n_mems:
         query_result = collection.query(
