@@ -408,6 +408,7 @@ def main(vcfg):
                 task.mode = mode
                 env.seed(seed)
                 env.set_task(task)
+
                 obs = env.reset()
                 info = env.info
                 reward = 0
@@ -434,7 +435,7 @@ def main(vcfg):
 
                 vec_store = chromadb.PersistentClient(path="./chroma_db")
 
-                collection_name = "first_selection"
+                collection_name = "exp1_base"
 
                 chroma_collection = vec_store.get_or_create_collection(collection_name)
 
@@ -498,8 +499,7 @@ def main(vcfg):
                         if success_rate > 0.8:
                             goal_str = "Given the memory, this instruction is likely to success"
                         if success_rate < 0.4:
-                            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. Therefore we instead use this modified instruction: "
-
+                            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
                             filters = [
                                 (
                                     vcfg["correction_n_examples"],
@@ -570,6 +570,12 @@ def main(vcfg):
                             extracted_lang_goal = extract_instruction_from_response(
                                 response
                             )
+
+                            # chop the instruction if it exceeds the limit of 77 tokens
+                            if len(extracted_lang_goal.split(" ")) > 70:
+                                extracted_lang_goal = " ".join(
+                                    extracted_lang_goal.split(" ")[:70]
+                                )
 
                             env.task.lang_goals[0] = extracted_lang_goal
 
@@ -730,10 +736,11 @@ def main(vcfg):
                         embedding, _, prompt = get_query_from_memory(curr_mem)
 
                         filters: List[Dict] = [
-                            {"task": {"$eq": vcfg["eval_task"]}},
-                            {"task": {"$eq": vcfg["eval_task"]}},
-                            {"task": {"$ne": vcfg["eval_task"]}},
+                            (2, {"task": {"$eq": vcfg["eval_task"]}}),
+                            (1, {"task": {"$ne": vcfg["eval_task"]}}),
                         ]
+
+                        filters = []
 
                         mems = get_memories(
                             n_mems=vcfg["feedback_n_examples"],
