@@ -3,16 +3,17 @@
 import io
 import os
 import json
+from chromadb.api import ClientAPI
 from thesisexp.memory.MemoryStorage import MemEntry, NaiveMemStorage
 from thesisexp.memory.Memory import NaiveMemory, BaseMemory
 from thesisexp.utils import (
     add_memory_into_collection,
     transform_mem_to_prompt,
     add_image_to_file,
-    get_embedding_from_llava,
     get_query_from_memory,
-    unpack_query_result,
     unpack_query_results,
+    unpack_peek_results,
+    update_collection,
 )
 from thesisexp.prompt import BasePrompt
 from thesisexp.langchain_llava import LLaVA
@@ -41,6 +42,41 @@ import time
 
 
 DEFAULT_IMAGE_TOKEN = "<image>"
+
+# -----------------------------------------------------------------------------
+# vector base utils
+# -----------------------------------------------------------------------------
+
+
+def copy_collection(
+    collection_from: str,
+    collection_to: str,
+    vec_store: ClientAPI,
+    filter: Optional[Dict] = None,
+    limit: int = 1000,
+):
+    collection_from: Collection = vec_store.get_collection(collection_from)
+
+    collection_to: Collection = vec_store.get_or_create_collection(collection_to)
+
+    if filter is None:
+        peek_result = collection_from.peek(limit=limit)
+        metadatas, _ = unpack_peek_results(peek_result)
+    else:
+        peek_result = collection_from.peek(limit=1)
+        _, query_embedding = unpack_peek_results(peek_result)
+
+        query_result = collection_from.query(
+            query_embeddings=query_embedding, where=filter, n_results=limit
+        )
+
+        metadatas, _, _, _ = unpack_query_results(query_result)
+
+    for metadata in metadatas:
+        mem = MemEntry.from_dict(metadata)
+
+        update_collection(mem, collection_to)
+
 
 # -----------------------------------------------------------------------------
 # LLM communication utils
@@ -388,6 +424,16 @@ def main(vcfg):
             record = vcfg["record"]["save_video"]
             n_demos = vcfg["n_demos"]
 
+            collection_name = vcfg["vector_base"]
+
+            vec_store = chromadb.PersistentClient(path="./chroma_db")
+            if vcfg["vector_base_control"]:
+                vec_store.delete_collection(collection_name)
+
+                copy_collection(vcfg["vector_base_source"], collection_name, vec_store)
+
+            chroma_collection = vec_store.get_or_create_collection(collection_name)
+
             # Run testing and save total rewards with last transition info.
             for i in range(0, n_demos):
                 print(f"Test: {i + 1}/{n_demos}")
@@ -432,12 +478,6 @@ def main(vcfg):
                 # initialize the memory
 
                 # memory = NaiveMemory(NaiveMemStorage(vcfg["memory_storage_dir"]))
-
-                vec_store = chromadb.PersistentClient(path="./chroma_db")
-
-                collection_name = "exp1_base"
-
-                chroma_collection = vec_store.get_or_create_collection(collection_name)
 
                 if vcfg["compare_logging"]:
                     assert epoch_log_dict is not None, "epoch_log_dict is None"

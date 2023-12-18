@@ -24,6 +24,9 @@ feedback: False
 compact_curr_mem: False
 feedback_n_examples: 3
 
+vector_base: "exp_base"
+vector_base_control: True
+vector_base_source: "exp_base-b"
 correction: True
 correction_feedback: False
 correction_feedback_use_gt_label: True
