@@ -596,18 +596,6 @@ def main(vcfg):
                                 )
                             )
 
-                            # prompt.add_prompt(response)
-                            # # prompt.get_instruction_prompt( compact_example=True, compact_curr=True)['prompt']
-
-                            # prompt.add_prompt(
-                            #     "A new instruction that is likely to success by adding color information or locational information, or we don't need to add anything. Given the successful memories, we use this instruction: "
-                            # )
-                            # response: str = llm(
-                            #     **prompt.get_instruction_prompt(
-                            #         no_image_in_example=True, compact_curr=True
-                            #     )
-                            # )
-
                             extracted_lang_goal = extract_instruction_from_response(
                                 response
                             )
@@ -679,13 +667,18 @@ def main(vcfg):
                             curr_mem, use_begin=True
                         )
 
-                        filters: List[Dict] = [
+                        filters: List[Tuple[int, Optional[Dict]]] = [
                             # {"success": True},
                             # {"task": "block-insertion"},
                             # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-                            {"task": {"$eq": vcfg["eval_task"]}},
-                            {"task": {"$ne": vcfg["eval_task"]}},
-                            {"task": {"$ne": vcfg["eval_task"]}},
+                            (
+                                2 * vcfg["correction_feedback_n_examples"] // 3,
+                                {"task": {"$eq": vcfg["eval_task"]}},
+                            ),
+                            (
+                                vcfg["correction_feedback_n_examples"] // 3,
+                                {"task": {"$eq": vcfg["eval_task"]}},
+                            ),
                         ]
 
                         mems = get_memories(
