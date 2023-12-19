@@ -144,3 +144,5 @@ dmypy.json
 data/put-block-in-bowl-seen-colors-test
 data/align-rope-test
 data
+chroma_db
+logs
