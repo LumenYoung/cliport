@@ -20,17 +20,21 @@ update_results: False # overwrite existing json results?
 checkpoint_type: 'val_missing'
 val_on_heldout: True
 
+# lumen experiment variables ------------------------------------------------------------
+
 feedback: False
 compact_curr_mem: False
 feedback_n_examples: 3
 
-vector_base: "exp_base"
+vector_base: "exp1_base"
 vector_base_control: True
-vector_base_source: "exp_base-b"
+vector_base_source: "exp1_base-b"
+
 correction: True
-correction_feedback: False
+correction_feedback: True
+correction_feedback_n_examples: 5
 correction_feedback_use_gt_label: True
-correction_n_examples: 3
+correction_n_examples: 5
 correction_judge_n_examples: 8
 
 compare_logging: True
@@ -43,6 +47,8 @@ shared_memory: False
 eval_task: packing-boxes-pairs-seen-colors # task to evaluate the model on
 model_task: ${eval_task} # task the model was trained on (e.g. multi-language-conditioned or packing-boxes-pairs-seen-colors)
 type: single # 'single' or 'multi'
+  
+# end lumen experiment variables --------------------------------------------------------
 
 # paths
 model_dir: ${root_dir}
