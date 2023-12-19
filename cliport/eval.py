@@ -3,7 +3,6 @@
 import io
 import os
 import json
-from chromadb.api import ClientAPI
 from thesisexp.memory.MemoryStorage import MemEntry, NaiveMemStorage
 from thesisexp.memory.Memory import NaiveMemory, BaseMemory
 from thesisexp.utils import (
@@ -33,6 +32,7 @@ from typing import List, Optional, Dict, Tuple
 from collections import deque
 import chromadb
 from chromadb.api.models.Collection import Collection
+from chromadb.api import ClientAPI
 import logging
 import orjson
 
@@ -426,9 +426,11 @@ def main(vcfg):
             n_demos = vcfg["n_demos"]
 
             collection_name = vcfg["vector_base"]
-
             vec_store = chromadb.PersistentClient(path="./chroma_db")
-            if vcfg["vector_base_control"]:
+
+            # ls = vec_store.list_collections()
+
+            if vcfg["vector_base_control"] and vcfg["correction_feedback"]:
                 vec_store.delete_collection(collection_name)
 
                 copy_collection(vcfg["vector_base_source"], collection_name, vec_store)
@@ -692,13 +694,22 @@ def main(vcfg):
                             task=vcfg["eval_task"],
                             memories=mems,
                             curr_mem=curr_mem,
-                            goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location and ignore the change of the robot arm. Reply with your reasoning. Response: ",
-                            system_prompt="You are a robot agent doing table-top manipulation. The language goal will be fed to a model with limited capability for execution and you are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
+                            goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
+                            system_prompt="We are a robot agent observing table-top manipulation. The language goal will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. Similar language goals has similar success rate. ",
                         )
 
+                        # prompt.get_instruction_prompt( compact_example=True, compact_curr=False)['prompt']
+
+                        # response: str = llm(
+                        #     **prompt.get_instruction_prompt(
+                        #         compact_example=True, compact_curr=False
+                        #     )
+                        # )
+                        # response: str = llm( **prompt.get_instruction_prompt( no_image_in_example=True, compact_curr=False))
+                        # prompt.get_instruction_prompt( no_image_in_example=True, compact_curr=False)['prompt']
                         response: str = llm(
                             **prompt.get_instruction_prompt(
-                                compact_example=True, compact_curr=False
+                                no_image_in_example=True, compact_curr=False
                             )
                         )
 
