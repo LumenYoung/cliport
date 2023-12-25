@@ -146,3 +146,5 @@ data/align-rope-test
 data
 chroma_db
 logs
+plots
+pdb_history.py
