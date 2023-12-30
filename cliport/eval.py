@@ -284,6 +284,16 @@ def feedback_agent_builder(agent_name: str) -> LLM:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 
 
+def correction_pipeline(
+    correction_agent: LLM,
+    obs_queue: deque,
+    lang_goal: str,
+    chroma_collection: Collection,
+    vcfg: Dict,
+):
+    pass
+
+
 def correction_feedback_pipeline(
     correction_agent: LLM,
     obs_queue: deque,
