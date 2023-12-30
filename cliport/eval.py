@@ -16,6 +16,7 @@ from thesisexp.utils import (
 )
 from thesisexp.prompt import BasePrompt
 from thesisexp.langchain_llava import LLaVA
+from thesisexp.langchain_cogvlm import CogVLM
 
 import numpy as np
 import hydra
@@ -29,6 +30,7 @@ from PIL import Image
 
 from typing import List, Optional, Dict, Tuple
 
+from langchain.llms.base import LLM
 from collections import deque
 import chromadb
 from chromadb.api.models.Collection import Collection
@@ -273,6 +275,13 @@ def llava_feedback(images: tuple, llm: LLaVA):
     return llm(prompt, images=result)
 
 
+def feedback_agent_builder(agent_name: str) -> LLM:
+    if agent_name == "llava":
+        return LLaVA()
+    elif agent_name == "cogvlm":
+        return CogVLM()
+    else:
+        raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 # ################################# DEBUG CODE
 
 # images = obs["color"]
@@ -386,6 +395,7 @@ def main(vcfg):
             name_suffixs: List[str] = [
                 vcfg["eval_task"],
                 "feedback" if vcfg["feedback"] else "",
+                vcfg["feedback_agent"] if vcfg["feedback"] else "",
                 f"correction_{vcfg['correction_n_examples']}examples"
                 if vcfg["correction"]
                 else "",
@@ -413,6 +423,9 @@ def main(vcfg):
             log_dict["feedback_n_examples"] = vcfg["feedback_n_examples"]
             log_dict["compact_curr_mem"] = vcfg["compact_curr_mem"]
 
+        feedback_agent = None
+        if vcfg["feedback"]:
+            feedback_agent = feedback_agent_builder(vcfg["feedback_agent"])
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
             # Initialize agent.
