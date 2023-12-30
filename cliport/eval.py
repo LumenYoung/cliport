@@ -391,6 +391,7 @@ def main(vcfg):
                 else "",
                 "correction_feedback" if vcfg["correction_feedback"] else "",
                 f"{vcfg['n_demos']}_demos",
+                "no_threshold" if vcfg["exp_no_threshold"] else "",
                 time.strftime("%Y-%m-%d", time.localtime()),
             ]
 
@@ -538,35 +539,47 @@ def main(vcfg):
                             count_success / vcfg["correction_judge_n_examples"]
                         )
 
-                        goal_str = ""
-                        if success_rate > 0.8:
-                            goal_str = "Given the memory, this instruction is likely to success"
-                        if success_rate < 0.4:
-                            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
-                            filters = [
-                                (
-                                    vcfg["correction_n_examples"],
-                                    {"task": {"$ne": vcfg["eval_task"]}},
-                                )
-                            ]
-                        else:
-                            goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
-                            filters = [
-                                (
-                                    2 * vcfg["correction_n_examples"] // 3,
-                                    {"task": {"$ne": vcfg["eval_task"]}},
-                                ),
-                                (
-                                    vcfg["correction_n_examples"] // 3,
-                                    {"task": {"$eq": vcfg["eval_task"]}},
-                                ),
-                            ]
+                        goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+                        filters = [
+                            (
+                                2 * vcfg["correction_n_examples"] // 3,
+                                {"task": {"$ne": vcfg["eval_task"]}},
+                            ),
+                            (
+                                vcfg["correction_n_examples"] // 3,
+                                {"task": {"$eq": vcfg["eval_task"]}},
+                            ),
+                        ]
+
+                        if not vcfg["exp_no_threshold"]:
+                            if success_rate > 0.8:
+                                goal_str = "Given the memory, this instruction is likely to success"
+                            if success_rate < 0.4:
+                                goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
+                                filters = [
+                                    (
+                                        vcfg["correction_n_examples"],
+                                        {"task": {"$ne": vcfg["eval_task"]}},
+                                    )
+                                ]
+                            else:
+                                goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+                                filters = [
+                                    (
+                                        2 * vcfg["correction_n_examples"] // 3,
+                                        {"task": {"$ne": vcfg["eval_task"]}},
+                                    ),
+                                    (
+                                        vcfg["correction_n_examples"] // 3,
+                                        {"task": {"$eq": vcfg["eval_task"]}},
+                                    ),
+                                ]
 
                         # while len(filters) < vcfg["correction_n_examples"]:
                         #     filters.append(None)
                         # filters = sorted(filters, key=lambda x: x is None)
 
-                        if not success_rate > 0.8:
+                        if not success_rate > 0.8 or vcfg["exp_no_threshold"]:
                             mems = get_memories(
                                 n_mems=vcfg["correction_n_examples"],
                                 embedding=embedding,
