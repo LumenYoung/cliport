@@ -282,6 +282,81 @@ def feedback_agent_builder(agent_name: str) -> LLM:
         return CogVLM()
     else:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
+
+def feedback_pipeline(
+    feedback_agent: LLM,
+    obs_queue: deque,
+    lang_goal: str,
+    chroma_collection: Collection,
+    vcfg: Dict,
+) -> Tuple[MemEntry, str]:
+    obs_images = [Image.fromarray(np.array(obs)) for obs in obs_queue]
+
+    for img in obs_images:
+        img.resize((336, 336))
+        img.format = "PNG"
+
+    curr_mem = MemEntry(
+        lang_goal,
+        images=obs_images,
+        task=vcfg["eval_task"],
+    )
+
+    embedding, _, prompt = get_query_from_memory(curr_mem)
+
+    filters: List[Dict] = [
+        (2, {"task": {"$eq": vcfg["eval_task"]}}),
+        (1, {"task": {"$ne": vcfg["eval_task"]}}),
+    ]
+
+    filters = []
+
+    mems = get_memories(
+        n_mems=vcfg["feedback_n_examples"],
+        embedding=embedding,
+        collection=chroma_collection,
+        filters=filters,
+    )
+
+    prompt = BasePrompt(
+        task=vcfg["eval_task"],
+        memories=mems,
+        curr_mem=curr_mem,
+    )
+
+    assert feedback_agent is not None, "feedback_agent is None"
+
+    response: str = feedback_agent(
+        **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
+    )
+
+    feedback = response[:300] if len(response) < 200 else response
+
+    prompt.add_prompt(response)
+    prompt.add_prompt(
+        "Given the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
+    )
+
+    yes_response: str = feedback_agent(
+        **prompt.get_memory_prompt(compact_curr=vcfg["compact_curr_mem"])
+    )
+
+    while "true" not in yes_response.lower() and "false" not in yes_response.lower():
+        yes_response: str = feedback_agent(
+            **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
+        )
+
+    success = False
+    if "true" in response.lower():
+        success = True
+    elif "false" in response.lower():
+        success = False
+
+    curr_mem.success = success
+
+    return curr_mem, feedback
+
+
 # ################################# DEBUG CODE
 
 # images = obs["color"]
@@ -790,72 +865,28 @@ def main(vcfg):
                     if vcfg["feedback"]:
                         # trasnform current_information in the memory
 
-                        obs_images = [
-                            Image.fromarray(np.array(obs)) for obs in obs_queue
-                        ]
-
-                        for img in obs_images:
-                            img.resize((336, 336))
-                            img.format = "PNG"
-
-                        curr_mem = MemEntry(
-                            lang_goal,
-                            images=obs_images,
-                            task=vcfg["eval_task"],
+                        curr_mem, feedback = feedback_pipeline(
+                            feedback_agent=feedback_agent,
+                            obs_queue=obs_queue,
+                            lang_goal=lang_goal,
+                            chroma_collection=chroma_collection,
+                            vcfg=vcfg,
                         )
-
-                        embedding, _, prompt = get_query_from_memory(curr_mem)
-
-                        filters: List[Dict] = [
-                            (2, {"task": {"$eq": vcfg["eval_task"]}}),
-                            (1, {"task": {"$ne": vcfg["eval_task"]}}),
-                        ]
-
-                        filters = []
-
-                        mems = get_memories(
-                            n_mems=vcfg["feedback_n_examples"],
-                            embedding=embedding,
-                            collection=chroma_collection,
-                            filters=filters,
-                        )
-
-                        prompt = BasePrompt(
-                            task=vcfg["eval_task"],
-                            memories=mems,
-                            curr_mem=curr_mem,
-                        )
-
-                        response: str = llm(
-                            **prompt.get_instruction_prompt(compact_example=True)
-                        )
-
-                        feedback = response[:300] if len(response) < 200 else response
-
-                        prompt.add_prompt(response)
-                        prompt.add_prompt(
-                            "Given the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
-                        )
-
-                        response: str = llm(
-                            **prompt.get_memory_prompt(
-                                compact_curr=vcfg["compact_curr_mem"]
-                            )
-                        )
-
-                        success = False
-                        if "true" in response.lower():
-                            success = True
-                        elif "false" in response.lower():
-                            success = False
-                        else:
-                            raise Exception(f"Unexpected response: {response}")
-
-                        curr_mem.success = success
 
                         logging.info(
-                            f"Evaluation on step {i}: success {success}, reason: {feedback}"
+                            f"Evaluation on step {i}: success {curr_mem.success}, reason: {feedback}"
                         )
+
+                        gt_success = True if reward > 0 else False
+
+                        if vcfg["feedback_use_gt_label"] and vcfg["compare_logging"]:
+                            curr_mem.success = True if reward > 0 else False
+
+                            assert step_log_dict is not None, "step_log_dict is None"
+
+                            step_log_dict["feedback_prediction"] = (
+                                True if gt_success == curr_mem.success else False
+                            )
 
                         add_memory_into_collection(chroma_collection, curr_mem)
 
