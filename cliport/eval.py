@@ -283,6 +283,89 @@ def feedback_agent_builder(agent_name: str) -> LLM:
     else:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 
+
+def correction_feedback_pipeline(
+    correction_agent: LLM,
+    obs_queue: deque,
+    lang_goal: str,
+    chroma_collection: Collection,
+    vcfg: Dict,
+):
+    obs_images = [Image.fromarray(np.array(obs)) for obs in obs_queue]
+
+    for img in obs_images:
+        img.resize((336, 336))
+        img.format = "PNG"
+
+    curr_mem = MemEntry(
+        lang_goal,
+        images=obs_images,
+        task=vcfg["eval_task"],
+    )
+
+    embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
+
+    filters: List[Tuple[int, Optional[Dict]]] = [
+        # {"success": True},
+        # {"task": "block-insertion"},
+        # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        (
+            2 * vcfg["correction_feedback_n_examples"] // 3,
+            {"task": {"$eq": vcfg["eval_task"]}},
+        ),
+        (
+            vcfg["correction_feedback_n_examples"] // 3,
+            {"task": {"$eq": vcfg["eval_task"]}},
+        ),
+    ]
+
+    mems = get_memories(
+        n_mems=vcfg["correction_n_examples"],
+        embedding=embedding,
+        collection=chroma_collection,
+        filters=filters,
+    )
+
+    prompt = BasePrompt(
+        task=vcfg["eval_task"],
+        memories=mems,
+        curr_mem=curr_mem,
+        goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
+        system_prompt="We are a robot agent observing table-top manipulation. The language goal will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. Similar language goals has similar success rate. ",
+    )
+
+    response: str = correction_agent(
+        **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=False)
+    )
+
+    prompt.add_prompt(response)
+
+    prompt.add_prompt(
+        "Gien your reasoning, reply 'true' if success or 'false' if fails. Response: "
+    )
+
+    yes_response: str = correction_agent(
+        **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=False)
+    )
+
+    while "true" not in yes_response.lower() and "false" not in yes_response.lower():
+        yes_response: str = correction_agent(
+            **prompt.get_instruction_prompt(
+                no_image_in_example=True, compact_curr=False
+            )
+        )
+
+    success = False
+    if "true" in yes_response.lower():
+        success = True
+    elif "false" in yes_response.lower():
+        success = False
+
+    curr_mem.success = success
+
+    return curr_mem
+
+
 def feedback_pipeline(
     feedback_agent: LLM,
     obs_queue: deque,
@@ -501,6 +584,7 @@ def main(vcfg):
         feedback_agent = None
         if vcfg["feedback"]:
             feedback_agent = feedback_agent_builder(vcfg["feedback_agent"])
+
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
             # Initialize agent.
@@ -750,115 +834,31 @@ def main(vcfg):
                         )
 
                     if vcfg["correction_feedback"]:
-                        obs_images = [
-                            Image.fromarray(np.array(obs)) for obs in obs_queue
-                        ]
-
-                        for img in obs_images:
-                            img.resize((336, 336))
-                            img.format = "PNG"
-
-                        curr_mem = MemEntry(
-                            info["lang_goal"],
-                            images=obs_images,
-                            task=vcfg["eval_task"],
+                        curr_mem = correction_feedback_pipeline(
+                            correction_agent=LLaVA(),
+                            obs_queue=obs_queue,
+                            lang_goal=info["lang_goal"],
+                            chroma_collection=chroma_collection,
+                            vcfg=vcfg,
                         )
-
-                        prompt.curr_mem = curr_mem  # type: ignore
-
-                        embedding, _, _ = get_query_from_memory(
-                            curr_mem, use_begin=True
-                        )
-
-                        filters: List[Tuple[int, Optional[Dict]]] = [
-                            # {"success": True},
-                            # {"task": "block-insertion"},
-                            # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-                            (
-                                2 * vcfg["correction_feedback_n_examples"] // 3,
-                                {"task": {"$eq": vcfg["eval_task"]}},
-                            ),
-                            (
-                                vcfg["correction_feedback_n_examples"] // 3,
-                                {"task": {"$eq": vcfg["eval_task"]}},
-                            ),
-                        ]
-
-                        mems = get_memories(
-                            n_mems=vcfg["correction_n_examples"],
-                            embedding=embedding,
-                            collection=chroma_collection,
-                            filters=filters,
-                        )
-
-                        prompt = BasePrompt(
-                            task=vcfg["eval_task"],
-                            memories=mems,
-                            curr_mem=curr_mem,
-                            goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
-                            system_prompt="We are a robot agent observing table-top manipulation. The language goal will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. Similar language goals has similar success rate. ",
-                        )
-
-                        # prompt.get_instruction_prompt( compact_example=True, compact_curr=False)['prompt']
-
-                        # response: str = llm(
-                        #     **prompt.get_instruction_prompt(
-                        #         compact_example=True, compact_curr=False
-                        #     )
-                        # )
-                        # response: str = llm( **prompt.get_instruction_prompt( no_image_in_example=True, compact_curr=False))
-                        # prompt.get_instruction_prompt( no_image_in_example=True, compact_curr=False)['prompt']
-                        response: str = llm(
-                            **prompt.get_instruction_prompt(
-                                no_image_in_example=True, compact_curr=False
-                            )
-                        )
-
-                        prompt.add_prompt(response)
-
-                        prompt.add_prompt(
-                            "Gien your reasoning, reply 'true' if success or 'false' if fails. Response: "
-                        )
-
-                        yes_response: str = llm(
-                            **prompt.get_instruction_prompt(
-                                no_image_in_example=True, compact_curr=False
-                            )
-                        )
-
-                        while (
-                            "true" not in yes_response.lower()
-                            and "false" not in yes_response.lower()
-                        ):
-                            yes_response: str = llm(
-                                **prompt.get_instruction_prompt(
-                                    no_image_in_example=True, compact_curr=False
-                                )
-                            )
-
-                        success = False
-                        if "true" in yes_response.lower():
-                            success = True
-                        elif "false" in yes_response.lower():
-                            success = False
-
-                        curr_mem.success = success
 
                         if (
                             vcfg["correction_feedback_use_gt_label"]
                             and vcfg["compare_logging"]
                         ):
-                            curr_mem.success = True if reward > 0 else False
+                            gt_success = True if reward > 0 else False
 
                             assert step_log_dict is not None, "step_log_dict is None"
 
                             step_log_dict["correct_prediction"] = (
-                                True if success == curr_mem.success else False
+                                True if gt_success == curr_mem.success else False
                             )
 
-                        logging.info(
-                            f"Evaluation on step {i}: success {success}, reason: {feedback}"
-                        )
+                            logging.info(
+                                f"Evaluation on step {i}: success {curr_mem.success}"
+                            )
+
+                            curr_mem.success = gt_success
 
                         add_memory_into_collection(chroma_collection, curr_mem)
 
