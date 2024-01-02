@@ -174,6 +174,13 @@ def image_to_byte_array(image: Image):
     return imgByteArr
 
 
+def feedback_agent_builder(agent_name: str) -> LLM:
+    if agent_name == "llava":
+        return LLaVA()
+    elif agent_name == "cogvlm":
+        return CogVLM()
+    else:
+        raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 
 
 
