@@ -174,61 +174,13 @@ def image_to_byte_array(image: Image):
     return imgByteArr
 
 
-def llava_few_shot_feedback(
-    curr_mem: MemEntry, llm: LLaVA, memory: BaseMemory
-) -> Tuple[str, bool]:
-    file = {}
 
-    good_example, bad_example = memory.sample("insert-block")
 
-    mem_good_prompt, images_1 = transform_mem_to_prompt(good_example)
 
-    add_image_to_file(file, images_1)
 
-    mem_bad_prompt, images_2 = transform_mem_to_prompt(bad_example)
 
-    add_image_to_file(file, images_2)
 
-    curr_prompt, images_3 = transform_mem_to_prompt(curr_mem)
 
-    add_image_to_file(file, images_3)
-
-    system_prompt = "You are trying to describe a robot manipulation outcome."
-
-    prompt = f"""
-    system: {system_prompt}
-
-    example 1:
-    {mem_good_prompt}
-
-    example 2:
-    {mem_bad_prompt}
-
-    current observation:
-    {curr_prompt}
-
-    Reply with your reasoning whether the goal is achieved or not.
-    Keep all descriptions short and relavant.
-
-    answer:
-    """
-
-    # discarded Describe whether the goal is achieved or not.
-
-    response1 = llm(prompt, images=file)
-
-    prompt += response1
-
-    prompt += "\nGiven the answer, respose with 'True' for success or 'False' for unsuccess. Response:"
-
-    response2 = llm(prompt)
-
-    if "true" in response2.lower():
-        return response2, True
-    elif "false" in response2.lower():
-        return response2, False
-    else:
-        raise Exception(f"Unexpected response: {response2}")
 
 
 def llava_feedback(images: tuple, llm: LLaVA):
