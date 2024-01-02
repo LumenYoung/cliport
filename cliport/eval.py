@@ -284,13 +284,6 @@ def correction_pipeline(
             system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
         )
 
-def feedback_agent_builder(agent_name: str) -> LLM:
-    if agent_name == "llava":
-        return LLaVA()
-    elif agent_name == "cogvlm":
-        return CogVLM()
-    else:
-        raise ValueError(f"Unexpected feedback agent name: {agent_name}")
         response: str = correction_agent(
             **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
         )
