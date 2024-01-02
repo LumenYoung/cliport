@@ -897,6 +897,7 @@ def main(vcfg):
                             step_log_dict["feedback_prediction"] = (
                                 True if gt_success == curr_mem.success else False
                             )
+                            step_log_dict["feedback"] = feedback
 
                         add_memory_into_collection(chroma_collection, curr_mem)
 
