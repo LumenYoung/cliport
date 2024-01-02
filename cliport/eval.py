@@ -216,32 +216,14 @@ def correction_pipeline(
         filters=judge_filters,
     )
 
-def llava_feedback(images: tuple, llm: LLaVA):
-    prompt: str = f"""
-    system: In the image {DEFAULT_IMAGE_TOKEN} is a robot several objects on the table,
-    in {DEFAULT_IMAGE_TOKEN} is the outcome.
-
-    goal:
-        Describe the color and shape of the object starting with "object:".
-        Describe the motion (most importantly direction in left, right, up, down) of the robot starting with "motion:".
-        Keep all descriptions short and simple. Reply with nothing irrelevant.
     count_success = 0
     for mem in judge_mems:
         if mem is None:
             continue
         count_success += 1 if mem.success else 0
 
-    answer:
-    """
-    result: Dict = {}
     success_rate = count_success / vcfg["correction_judge_n_examples"]
 
-    img1 = Image.fromarray(np.array(images[0])).convert("RGB")
-    img1.format = "PNG"
-    # img1.info = {'dpi': (96.012, 96.012)}
-    img1.is_animated = False
-    img1.n_frames = 1
-    img1.resize((336, 336))
     goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
     filters = [
         (
@@ -254,17 +236,6 @@ def llava_feedback(images: tuple, llm: LLaVA):
         ),
     ]
 
-    img2 = Image.fromarray(np.array(images[1])).convert("RGB")
-    img2.format = "PNG"
-    # img2.info = {'dpi': (96.012, 96.012)}
-    img2.is_animated = False
-    img2.n_frames = 1
-    img1.resize((336, 336))
-
-    # img1.save("dummy.png")
-
-    # with open("dummy.png", "rb") as img_file:
-    #     result["image_file_1"] = img_file.read()
     if not vcfg["exp_no_threshold"]:
         if success_rate > 0.8:
             goal_str = "Given the memory, this instruction is likely to success"
@@ -289,17 +260,12 @@ def llava_feedback(images: tuple, llm: LLaVA):
                 ),
             ]
 
-    result["image_file_1"] = image_to_byte_array(img1)
-    # img2.save("dummy.png")
     # while len(filters) < vcfg["correction_n_examples"]:
     #     filters.append(None)
     # filters = sorted(filters, key=lambda x: x is None)
 
-    # with open("dummy.png", "rb") as img_file:
-    #     result["image_file_2"] = img_file.read()
     decided_lang_goal = lang_goal
 
-    result["image_file_2"] = image_to_byte_array(img2)
     if not success_rate > 0.8 or vcfg["exp_no_threshold"]:
         mems = get_memories(
             n_mems=vcfg["correction_n_examples"],
@@ -308,7 +274,6 @@ def llava_feedback(images: tuple, llm: LLaVA):
             filters=filters,
         )
 
-    return llm(prompt, images=result)
         assert len(mems) == vcfg["correction_n_examples"], "Unexpected lens of memories"
 
         prompt = BasePrompt(
