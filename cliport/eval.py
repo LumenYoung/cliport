@@ -183,12 +183,38 @@ def feedback_agent_builder(agent_name: str) -> LLM:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 
 
+def correction_pipeline(
+    correction_agent: LLM,
+    obs: Dict[str, Tuple],
+    lang_goal: str,
+    chroma_collection: Collection,
+    vcfg: Dict,
+) -> str:
+    obs_image = Image.fromarray(np.array(obs["color"][1]))
+    obs_image.resize((336, 336))
+    obs_image.format = "PNG"
 
+    curr_mem = MemEntry(lang_goal, images=[obs_image], task=vcfg["eval_task"])
 
+    embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
 
+    filters: List[Tuple[int, Optional[Dict]]] = []
 
+    judge_filters: List[Tuple[int, Optional[Dict]]] = []
 
+    judge_filters.append(
+        (
+            vcfg["correction_judge_n_examples"],
+            {"task": vcfg["eval_task"]},
+        )
+    )
 
+    judge_mems = get_memories(
+        n_mems=vcfg["correction_n_examples"],
+        embedding=embedding,
+        collection=chroma_collection,
+        filters=judge_filters,
+    )
 
 def llava_feedback(images: tuple, llm: LLaVA):
     prompt: str = f"""
@@ -199,10 +225,16 @@ def llava_feedback(images: tuple, llm: LLaVA):
         Describe the color and shape of the object starting with "object:".
         Describe the motion (most importantly direction in left, right, up, down) of the robot starting with "motion:".
         Keep all descriptions short and simple. Reply with nothing irrelevant.
+    count_success = 0
+    for mem in judge_mems:
+        if mem is None:
+            continue
+        count_success += 1 if mem.success else 0
 
     answer:
     """
     result: Dict = {}
+    success_rate = count_success / vcfg["correction_judge_n_examples"]
 
     img1 = Image.fromarray(np.array(images[0])).convert("RGB")
     img1.format = "PNG"
@@ -210,6 +242,17 @@ def llava_feedback(images: tuple, llm: LLaVA):
     img1.is_animated = False
     img1.n_frames = 1
     img1.resize((336, 336))
+    goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+    filters = [
+        (
+            2 * vcfg["correction_n_examples"] // 3,
+            {"task": {"$ne": vcfg["eval_task"]}},
+        ),
+        (
+            vcfg["correction_n_examples"] // 3,
+            {"task": {"$eq": vcfg["eval_task"]}},
+        ),
+    ]
 
     img2 = Image.fromarray(np.array(images[1])).convert("RGB")
     img2.format = "PNG"
@@ -222,17 +265,59 @@ def llava_feedback(images: tuple, llm: LLaVA):
 
     # with open("dummy.png", "rb") as img_file:
     #     result["image_file_1"] = img_file.read()
+    if not vcfg["exp_no_threshold"]:
+        if success_rate > 0.8:
+            goal_str = "Given the memory, this instruction is likely to success"
+        if success_rate < 0.4:
+            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
+            filters = [
+                (
+                    vcfg["correction_n_examples"],
+                    {"task": {"$ne": vcfg["eval_task"]}},
+                )
+            ]
+        else:
+            goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+            filters = [
+                (
+                    2 * vcfg["correction_n_examples"] // 3,
+                    {"task": {"$ne": vcfg["eval_task"]}},
+                ),
+                (
+                    vcfg["correction_n_examples"] // 3,
+                    {"task": {"$eq": vcfg["eval_task"]}},
+                ),
+            ]
 
     result["image_file_1"] = image_to_byte_array(img1)
     # img2.save("dummy.png")
+    # while len(filters) < vcfg["correction_n_examples"]:
+    #     filters.append(None)
+    # filters = sorted(filters, key=lambda x: x is None)
 
     # with open("dummy.png", "rb") as img_file:
     #     result["image_file_2"] = img_file.read()
+    decided_lang_goal = lang_goal
 
     result["image_file_2"] = image_to_byte_array(img2)
+    if not success_rate > 0.8 or vcfg["exp_no_threshold"]:
+        mems = get_memories(
+            n_mems=vcfg["correction_n_examples"],
+            embedding=embedding,
+            collection=chroma_collection,
+            filters=filters,
+        )
 
     return llm(prompt, images=result)
+        assert len(mems) == vcfg["correction_n_examples"], "Unexpected lens of memories"
 
+        prompt = BasePrompt(
+            task=vcfg["eval_task"],
+            memories=mems,
+            curr_mem=curr_mem,
+            goal=goal_str,
+            system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
+        )
 
 def feedback_agent_builder(agent_name: str) -> LLM:
     if agent_name == "llava":
@@ -241,16 +326,13 @@ def feedback_agent_builder(agent_name: str) -> LLM:
         return CogVLM()
     else:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
+        response: str = correction_agent(
+            **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
+        )
 
+        decided_lang_goal = extract_instruction_from_response(response)
 
-def correction_pipeline(
-    correction_agent: LLM,
-    obs_queue: deque,
-    lang_goal: str,
-    chroma_collection: Collection,
-    vcfg: Dict,
-):
-    pass
+    return decided_lang_goal
 
 
 def correction_feedback_pipeline(
@@ -635,136 +717,23 @@ def main(vcfg):
                     print(f"Lang Goal: {lang_goal}")
 
                     if vcfg["correction"]:
-                        obs_image = Image.fromarray(np.array(obs["color"][1]))
-                        obs_image.resize((336, 336))
-                        obs_image.format = "PNG"
-
-                        curr_mem = MemEntry(
-                            lang_goal, images=[obs_image], task=vcfg["eval_task"]
+                        extracted_lang_goal = correction_pipeline(
+                            correction_agent=LLaVA(),
+                            obs=obs,
+                            lang_goal=info["lang_goal"],
+                            chroma_collection=chroma_collection,
+                            vcfg=vcfg,
                         )
 
-                        embedding, _, _ = get_query_from_memory(
-                            curr_mem, use_begin=True
-                        )
-
-                        # filters: List[Tuple[int, Optional[Dict]]] = [
-                        #     {"task": vcfg["eval_task"]},
-                        #     {"task": vcfg["eval_task"]},
-                        # ]
-
-                        filters: List[Tuple[int, Optional[Dict]]] = []
-
-                        judge_filters: List[Tuple[int, Optional[Dict]]] = []
-
-                        judge_filters.append(
-                            (
-                                vcfg["correction_judge_n_examples"],
-                                {"task": vcfg["eval_task"]},
-                            )
-                        )
-
-                        judge_mems = get_memories(
-                            n_mems=vcfg["correction_n_examples"],
-                            embedding=embedding,
-                            collection=chroma_collection,
-                            filters=judge_filters,
-                        )
-
-                        count_success = 0
-                        for mem in judge_mems:
-                            if mem is None:
-                                continue
-                            count_success += 1 if mem.success else 0
-
-                        success_rate = (
-                            count_success / vcfg["correction_judge_n_examples"]
-                        )
-
-                        goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
-                        filters = [
-                            (
-                                2 * vcfg["correction_n_examples"] // 3,
-                                {"task": {"$ne": vcfg["eval_task"]}},
-                            ),
-                            (
-                                vcfg["correction_n_examples"] // 3,
-                                {"task": {"$eq": vcfg["eval_task"]}},
-                            ),
-                        ]
-
-                        if not vcfg["exp_no_threshold"]:
-                            if success_rate > 0.8:
-                                goal_str = "Given the memory, this instruction is likely to success"
-                            if success_rate < 0.4:
-                                goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
-                                filters = [
-                                    (
-                                        vcfg["correction_n_examples"],
-                                        {"task": {"$ne": vcfg["eval_task"]}},
-                                    )
-                                ]
-                            else:
-                                goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
-                                filters = [
-                                    (
-                                        2 * vcfg["correction_n_examples"] // 3,
-                                        {"task": {"$ne": vcfg["eval_task"]}},
-                                    ),
-                                    (
-                                        vcfg["correction_n_examples"] // 3,
-                                        {"task": {"$eq": vcfg["eval_task"]}},
-                                    ),
-                                ]
-
-                        # while len(filters) < vcfg["correction_n_examples"]:
-                        #     filters.append(None)
-                        # filters = sorted(filters, key=lambda x: x is None)
-
-                        if not success_rate > 0.8 or vcfg["exp_no_threshold"]:
-                            mems = get_memories(
-                                n_mems=vcfg["correction_n_examples"],
-                                embedding=embedding,
-                                collection=chroma_collection,
-                                filters=filters,
+                        # chop the instruction if it exceeds the limit of 77 tokens
+                        if len(extracted_lang_goal.split(" ")) > 70:
+                            extracted_lang_goal = " ".join(
+                                extracted_lang_goal.split(" ")[:70]
                             )
 
-                            assert (
-                                len(mems) == vcfg["correction_n_examples"]
-                            ), "Unexpected lens of memories"
+                        env.task.lang_goals[0] = extracted_lang_goal
 
-                            prompt = BasePrompt(
-                                task=vcfg["eval_task"],
-                                memories=mems,
-                                curr_mem=curr_mem,
-                                goal=goal_str,
-                                system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
-                            )
-
-                            # response: str = llm(
-                            #     **prompt.get_instruction_prompt(
-                            #         compact_example=True, compact_curr=True
-                            #     )
-                            # )
-
-                            response: str = llm(
-                                **prompt.get_instruction_prompt(
-                                    no_image_in_example=True, compact_curr=True
-                                )
-                            )
-
-                            extracted_lang_goal = extract_instruction_from_response(
-                                response
-                            )
-
-                            # chop the instruction if it exceeds the limit of 77 tokens
-                            if len(extracted_lang_goal.split(" ")) > 70:
-                                extracted_lang_goal = " ".join(
-                                    extracted_lang_goal.split(" ")[:70]
-                                )
-
-                            env.task.lang_goals[0] = extracted_lang_goal
-
-                            info["lang_goal"] = env.task.lang_goals[0]
+                        info["lang_goal"] = extracted_lang_goal
 
                     act = agent.act(obs, info, goal)
 
