@@ -77,7 +77,7 @@ def extract_grouped_step_rewards_and_successes(
             if not step_key.startswith("step_"):
                 continue
             curr_epoch_reward.append(float(step_value["reward"]))
-            curr_epoch_success.append(step_value["done"])
+            curr_epoch_success.append(True if step_value["reward"] > 0 else False)
 
         rewards.append(curr_epoch_reward)
         successes.append(curr_epoch_success)
@@ -97,7 +97,7 @@ def plot_datas(
     for data in datas:
         if smooth_window_size is not None:
             data = moving_average(data, smooth_window_size)
-        plt.plot(data, label=filename)  # Plot the rewards
+        plt.plot(data, label=file_name)  # Plot the rewards
 
     plt.xlabel(xlabel)  # Set the x-axis label
     plt.ylabel(ylabel)  # Set the y-axis label
@@ -110,20 +110,37 @@ def plot_datas(
     plt.savefig(file_name)
 
 
-if __name__ == "__main__":
+def extract_feedback_prediction(data: Dict) -> List[bool]:
+    result = []
+
+    for key, value in data.items():
+        if not key.startswith("epoch_"):
+            continue
+
+        for step_key, step_value in value.items():
+            if not step_key.startswith("step_"):
+                continue
+            result.append(step_value["feedback_prediction"])
+
+    return result
+
+
+def calculate_experiments_and_plot():
     log_dir = "./logs"
     plot_dir = "./plots"
 
     log_files = os.listdir(log_dir)
 
     log_files = [
-        "palletizing-boxes-100_demos-2023-12-16.json",
-        "palletizing-boxes-correction_5examples-100_demos-2023-12-16.json",
-        "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
+        # "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
         # "towers-of-hanoi-seq-full-100_demos-2023-12-17.json",
         # "towers-of-hanoi-seq-full-correction_5examples-100_demos-2023-12-18.json",
-        # "block-insertion-correction_5examples-correction_feedback-100_demos-2023-12-19.json",
-        # "block-insertion-100_demos-2023-12-16.json",
+        "block-insertion-correction_5examples-correction_feedback-100_demos-2023-12-19.json",
+        "block-insertion-100_demos-2023-12-16.json",
+        "palletizing-boxes-100_demos-2023-12-16.json",
+        "palletizing-boxes-correction_5examples-100_demos-2023-12-16.json",
+        "palletizing-boxes-correction_5examples-correction_feedback-100_demos-no_threshold-2023-12-26.json",
+        "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
     ]
 
     plt.figure(figsize=(10, 6))  # Set the figure size
@@ -164,17 +181,41 @@ if __name__ == "__main__":
         print("Steps: ", over_all_steps)
         print("Success steps: ", overall_success_steps)
         print("Overall rewards: ", np.array(overall_rewards).sum())
-        print(
-            "Average rewards: ", np.array(overall_rewards).sum() / overall_success_steps
-        )
+        if overall_success_steps > 0:
+            print(
+                "Average rewards: ",
+                np.array(overall_rewards).sum() / over_all_steps,
+            )
 
         # rewards = moving_average(rewards, windowsize)
 
-    plot_datas(
-        comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=None
-    )
+    plot_datas(comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=None)
     plot_datas(
         comp_successes,
         f"{plot_dir}/{prefix}success_count",
         ylabel="Success Count",
     )
+
+
+def compare_feedback_accuracy():
+    log_files: Dict = {
+        "cogvlm": "palletizing-boxes-feedback-cogvlm-100_demos-2024-01-01.json",
+        "llava": "palletizing-boxes-feedback-llava-100_demos-2024-01-02.json",
+    }
+
+    log_dir = "./logs"
+
+    for key, value in log_files.items():
+        data = load_json_log(Path(log_dir, value))
+
+        feedback_predictions = extract_feedback_prediction(data)
+
+        total = len(feedback_predictions)
+        correct = sum(feedback_predictions)
+
+        print(f"{key}: {correct}/{total} = {correct/total}")
+
+
+if __name__ == "__main__":
+    calculate_experiments_and_plot()
+    # compare_feedback_accuracy()
