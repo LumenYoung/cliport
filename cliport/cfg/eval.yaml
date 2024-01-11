@@ -22,7 +22,7 @@ val_on_heldout: True
 
 # lumen experiment variables ------------------------------------------------------------
 
-feedback: True
+feedback: False
 feedback_agent: "llava" # options: cogvlm llava
 compact_curr_mem: True
 feedback_use_gt_label: True
@@ -32,14 +32,14 @@ vector_base: "exp1_base"
 vector_base_control: True
 vector_base_source: "exp1_base-b"
 
-correction: False
-correction_feedback: False
+correction: True
+correction_feedback: True
 correction_feedback_n_examples: 5
 correction_feedback_use_gt_label: True
 correction_n_examples: 5
 correction_judge_n_examples: 8
 
-exp_no_threshold: False
+exp_no_threshold: True
 
 compare_logging: True
 compare_logging_path: "/home/yang/cliport/logs"
