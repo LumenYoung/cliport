@@ -10,8 +10,9 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              # count: 1
               capabilities: [gpu]
+              device_ids: ['1']
     volumes:
       - .:/home/yang/cliport
       - ../:/home/yang/llm # assume it is in the submodule of main repo
