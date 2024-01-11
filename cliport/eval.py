@@ -224,7 +224,7 @@ def correction_pipeline(
 
     success_rate = count_success / vcfg["correction_judge_n_examples"]
 
-    goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
+    goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
     filters = [
         (
             2 * vcfg["correction_n_examples"] // 3,
@@ -234,12 +234,6 @@ def correction_pipeline(
             vcfg["correction_n_examples"] // 3,
             {"task": {"$eq": vcfg["eval_task"]}},
         ),
-    ]
-    filters = [
-        (
-            vcfg["correction_n_examples"],
-            {"task": {"$ne": vcfg["eval_task"]}},
-        )
     ]
 
     if not vcfg["exp_no_threshold"]:
@@ -305,7 +299,7 @@ def correction_feedback_pipeline(
     lang_goal: str,
     chroma_collection: Collection,
     vcfg: Dict,
-) -> Tuple[MemEntry, str]:
+):
     obs_images = [Image.fromarray(np.array(obs)) for obs in obs_queue]
 
     for img in obs_images:
@@ -378,7 +372,7 @@ def correction_feedback_pipeline(
 
     curr_mem.success = success
 
-    return curr_mem, response
+    return curr_mem
 
 
 def feedback_pipeline(
@@ -445,9 +439,9 @@ def feedback_pipeline(
         )
 
     success = False
-    if "true" in yes_response.lower():
+    if "true" in response.lower():
         success = True
-    elif "false" in yes_response.lower():
+    elif "false" in response.lower():
         success = False
 
     curr_mem.success = success
@@ -736,14 +730,18 @@ def main(vcfg):
                         )
 
                     if vcfg["correction_feedback"]:
-                        curr_mem, feedback = correction_feedback_pipeline(
+                        curr_mem = correction_feedback_pipeline(
                             correction_agent=LLaVA(),
                             obs_queue=obs_queue,
                             lang_goal=info["lang_goal"],
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
                         )
-                        if vcfg["compare_logging"]:
+
+                        if (
+                            vcfg["correction_feedback_use_gt_label"]
+                            and vcfg["compare_logging"]
+                        ):
                             gt_success = True if reward > 0 else False
 
                             assert step_log_dict is not None, "step_log_dict is None"
@@ -751,14 +749,12 @@ def main(vcfg):
                             step_log_dict["correct_prediction"] = (
                                 True if gt_success == curr_mem.success else False
                             )
-                            step_log_dict["feedback"] = feedback
 
                             logging.info(
                                 f"Evaluation on step {i}: success {curr_mem.success}"
                             )
 
-                            if vcfg["correction_feedback_use_gt_label"]:
-                                curr_mem.success = gt_success
+                            curr_mem.success = gt_success
 
                         add_memory_into_collection(chroma_collection, curr_mem)
 
@@ -779,16 +775,15 @@ def main(vcfg):
 
                         gt_success = True if reward > 0 else False
 
-                        if vcfg["compare_logging"]:
+                        if vcfg["feedback_use_gt_label"] and vcfg["compare_logging"]:
+                            curr_mem.success = True if reward > 0 else False
+
                             assert step_log_dict is not None, "step_log_dict is None"
 
                             step_log_dict["feedback_prediction"] = (
                                 True if gt_success == curr_mem.success else False
                             )
                             step_log_dict["feedback"] = feedback
-
-                            if vcfg["feedback_use_gt_label"]:
-                                curr_mem.success = True if reward > 0 else False
 
                         add_memory_into_collection(chroma_collection, curr_mem)
 
