@@ -174,11 +174,15 @@ def image_to_byte_array(image: Image):
     return imgByteArr
 
 
-def feedback_agent_builder(agent_name: str) -> LLM:
+def feedback_agent_builder(agent_name: str, llm_server_url: str) -> LLM:
     if agent_name == "llava":
-        return LLaVA()
+        agent = LLaVA()
+        agent.set_url(llm_server_url)
+        return agent
     elif agent_name == "cogvlm":
-        return CogVLM()
+        agent = CogVLM()
+        agent.set_url(llm_server_url)
+        return agent
     else:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 
@@ -394,7 +398,9 @@ def feedback_pipeline(
         task=vcfg["eval_task"],
     )
 
-    embedding, _, prompt = get_query_from_memory(curr_mem)
+    embedding, _, prompt = get_query_from_memory(
+        curr_mem, url=vcfg["llm_embedding_url"]
+    )
 
     filters: List[Dict] = [
         (2, {"task": {"$eq": vcfg["eval_task"]}}),
@@ -479,7 +485,6 @@ def main(vcfg):
     # Load train cfg
     tcfg = utils.load_hydra_config(vcfg["train_config"])
 
-    llm = LLaVA()
     # Initialize environment and task.
     env = Environment(
         vcfg["assets_root"],
@@ -592,7 +597,21 @@ def main(vcfg):
 
         feedback_agent = None
         if vcfg["feedback"]:
-            feedback_agent = feedback_agent_builder(vcfg["feedback_agent"])
+            feedback_agent = feedback_agent_builder(
+                vcfg["feedback_agent"], vcfg["llm_server_url"]
+            )
+
+        correction_feedback_agent = None
+        if vcfg["correction_feedback"]:
+            correction_feedback_agent = feedback_agent_builder(
+                vcfg["correction_feedback_agent"], vcfg["llm_server_url"]
+            )
+
+        correction_agent = None
+        if vcfg["correction"]:
+            correction_agent = feedback_agent_builder(
+                vcfg["correction_agent"], vcfg["llm_server_url"]
+            )
 
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
@@ -676,7 +695,7 @@ def main(vcfg):
 
                     if vcfg["correction"]:
                         extracted_lang_goal = correction_pipeline(
-                            correction_agent=LLaVA(),
+                            correction_agent=correction_agent,
                             obs=obs,
                             lang_goal=info["lang_goal"],
                             chroma_collection=chroma_collection,
@@ -731,7 +750,7 @@ def main(vcfg):
 
                     if vcfg["correction_feedback"]:
                         curr_mem = correction_feedback_pipeline(
-                            correction_agent=LLaVA(),
+                            correction_agent=correction_feedback_agent,
                             obs_queue=obs_queue,
                             lang_goal=info["lang_goal"],
                             chroma_collection=chroma_collection,
