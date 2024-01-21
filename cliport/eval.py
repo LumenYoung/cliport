@@ -228,23 +228,19 @@ def correction_pipeline(
 
     success_rate = count_success / vcfg["correction_judge_n_examples"]
 
-    goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+    goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
     filters = [
         (
-            2 * vcfg["correction_n_examples"] // 3,
+            vcfg["correction_n_examples"],
             {"task": {"$ne": vcfg["eval_task"]}},
-        ),
-        (
-            vcfg["correction_n_examples"] // 3,
-            {"task": {"$eq": vcfg["eval_task"]}},
-        ),
+        )
     ]
 
     if not vcfg["exp_no_threshold"]:
-        if success_rate > 0.8:
+        if success_rate > 0.9:
             goal_str = "Given the memory, this instruction is likely to success"
-        if success_rate < 0.4:
-            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
+        if success_rate < 0.6:
+            goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information we observed. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
             filters = [
                 (
                     vcfg["correction_n_examples"],
@@ -252,7 +248,7 @@ def correction_pipeline(
                 )
             ]
         else:
-            goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information can be helpful. Therefore we use the improved instruction: "
+            goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information from our observation can be helpful. Therefore we use the improved instruction: "
             filters = [
                 (
                     2 * vcfg["correction_n_examples"] // 3,
@@ -270,7 +266,7 @@ def correction_pipeline(
 
     decided_lang_goal = lang_goal
 
-    if not success_rate > 0.8 or vcfg["exp_no_threshold"]:
+    if not success_rate > 0.9 or vcfg["exp_no_threshold"]:
         mems = get_memories(
             n_mems=vcfg["correction_n_examples"],
             embedding=embedding,
@@ -278,7 +274,7 @@ def correction_pipeline(
             filters=filters,
         )
 
-        assert len(mems) == vcfg["correction_n_examples"], "Unexpected lens of memories"
+        # assert len(mems) == vcfg["correction_n_examples"], "Unexpected lens of memories"
 
         prompt = BasePrompt(
             task=vcfg["eval_task"],
@@ -343,7 +339,7 @@ def correction_feedback_pipeline(
         task=vcfg["eval_task"],
         memories=mems,
         curr_mem=curr_mem,
-        goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
+        goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
         system_prompt="We are a robot agent observing table-top manipulation. The language goal will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. Similar language goals has similar success rate. ",
     )
 
@@ -568,13 +564,16 @@ def main(vcfg):
                 vcfg["eval_task"],
                 "feedback" if vcfg["feedback"] else "",
                 vcfg["feedback_agent"] if vcfg["feedback"] else "",
-                f"correction_{vcfg['correction_n_examples']}examples"
+                vcfg["correction_feedback_agent"]
+                if vcfg["correction_feedback"]
+                else "",
+                f"correction_{vcfg['correction_n_examples']}"
                 if vcfg["correction"]
                 else "",
                 "correction_feedback" if vcfg["correction_feedback"] else "",
                 f"{vcfg['n_demos']}_demos",
                 "no_threshold" if vcfg["exp_no_threshold"] else "",
-                time.strftime("%Y-%m-%d", time.localtime()),
+                time.strftime("%Y-%m-%d-%H", time.localtime()),
             ]
 
             name_suffixs = [s for s in name_suffixs if s != ""]
@@ -757,10 +756,7 @@ def main(vcfg):
                             vcfg=vcfg,
                         )
 
-                        if (
-                            vcfg["correction_feedback_use_gt_label"]
-                            and vcfg["compare_logging"]
-                        ):
+                        if vcfg["compare_logging"]:
                             gt_success = True if reward > 0 else False
 
                             assert step_log_dict is not None, "step_log_dict is None"
@@ -773,9 +769,14 @@ def main(vcfg):
                                 f"Evaluation on step {i}: success {curr_mem.success}"
                             )
 
-                            curr_mem.success = gt_success
+                            if vcfg["correction_feedback_use_gt_label"]:
+                                curr_mem.success = gt_success
 
-                        add_memory_into_collection(chroma_collection, curr_mem)
+                        add_memory_into_collection(
+                            chroma_collection,
+                            curr_mem,
+                            embedding_url=vcfg["llm_embedding_url"],
+                        )
 
                     if vcfg["feedback"]:
                         # trasnform current_information in the memory
