@@ -55,12 +55,51 @@ function get_and_run_cliport_controled() {
                          model_task=multi-language-conditioned \
                          agent=cliport \
                          mode=test \
-                         n_demos=100 \
+                         n_demos=50 \
                          train_demos=1000 \
                          exp_folder=cliport_quickstart \
                          checkpoint_type=test_best \
                          update_results=True \
                          disp=False
+
+}
+
+function exp_compare_feedback_accuracy() {
+  local eval_task=$1
+
+  python3 cliport/demos.py n=20 \
+                          task=${eval_task} \
+                          mode=test
+
+  python3 cliport/eval.py eval_task=${eval_task} \
+                         model_task=multi-language-conditioned \
+                         agent=cliport \
+                         mode=test \
+                         n_demos=20 \
+                         train_demos=1000 \
+                         exp_folder=cliport_quickstart \
+                         checkpoint_type=test_best \
+                         update_results=True \
+                         disp=False \
+                         correction_feedback_agent="llava"
+
+  # rm -rf data/${eval_task}-test
+
+  # python3 cliport/demos.py n=20 \
+  #                         task=${eval_task} \
+  #                         mode=test
+
+  # python3 cliport/eval.py eval_task=${eval_task} \
+  #                        model_task=multi-language-conditioned \
+  #                        agent=cliport \
+  #                        mode=test \
+  #                        n_demos=20 \
+  #                        train_demos=1000 \
+  #                        exp_folder=cliport_quickstart \
+  #                        checkpoint_type=test_best \
+  #                        update_results=True \
+  #                        disp=False \
+  #                        correction_feedback_agent="llava"
 }
 
 function run_cliport_controled() {
@@ -102,23 +141,26 @@ task_names=("separating-piles-full")
 
 task_names=("stack-block-pyramid-seq-seen-colors")
 
-task_names=("palletizing-boxes")
-
 
 # history
 
 task_names=("assembling-kits-seq-full")
 
+task_names=("towers-of-hanoi-seq-full")
 
-task_names=("block-insertion")
-task_names=("block-insertion", "palletizing-boxes")
+task_names=("packing-shapes", "separating-piles-full")
 
 task_names=("towers-of-hanoi-seq-full")
+
+task_names=("towers-of-hanoi-seq-full")
+
+task_names=("palletizing-boxes")
 
 # Loop over the array
 for task in "${task_names[@]}"
 do
   # run_cliport $task
-  run_cliport_controled $task
-  # get_and_run_cliport_controled $task
+  # run_cliport_controled $task
+  exp_compare_feedback_accuracy $task
 done
+

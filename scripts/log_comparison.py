@@ -120,7 +120,10 @@ def extract_feedback_prediction(data: Dict) -> List[bool]:
         for step_key, step_value in value.items():
             if not step_key.startswith("step_"):
                 continue
-            result.append(step_value["feedback_prediction"])
+            if "feedback_prediction" in step_value.keys():
+                result.append(step_value["feedback_prediction"])
+            elif "correct_prediction" in step_value.keys():
+                result.append(step_value["correct_prediction"])
 
     return result
 
@@ -131,17 +134,26 @@ def calculate_experiments_and_plot():
 
     log_files = os.listdir(log_dir)
 
-    log_files = [
-        # "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
-        # "towers-of-hanoi-seq-full-100_demos-2023-12-17.json",
-        # "towers-of-hanoi-seq-full-correction_5examples-100_demos-2023-12-18.json",
-        "block-insertion-correction_5examples-correction_feedback-100_demos-2023-12-19.json",
-        "block-insertion-100_demos-2023-12-16.json",
-        "palletizing-boxes-100_demos-2023-12-16.json",
-        "palletizing-boxes-correction_5examples-100_demos-2023-12-16.json",
-        "palletizing-boxes-correction_5examples-correction_feedback-100_demos-no_threshold-2023-12-26.json",
-        "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
-    ]
+    log_files = {
+        # "llava palletizing-boxes old 2":"palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
+        # # "towers-of-hanoi-seq-full-100_demos-2023-12-17.json",
+        # # "towers-of-hanoi-seq-full-correction_5examples-100_demos-2023-12-18.json",
+        # "llava block-insertion old":"block-insertion-correction_5examples-correction_feedback-100_demos-2023-12-19.json",
+        # "block insertion vanilla":"block-insertion-100_demos-2023-12-16.json",
+        "vanilla palletizing-boxes": "palletizing-boxes-100_demos-2023-12-16.json",
+        # "llava palletizing-boxes old": "palletizing-boxes-correction_5examples-100_demos-2023-12-16.json",
+        # "correction and feedback no thresholding": "palletizing-boxes-correction_5examples-correction_feedback-100_demos-no_threshold-2023-12-26.json",
+        "correction and feedback thresholded": "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
+        # # "palletizing-boxes-feedback-cogvlm-50_demos-2024-01-08.json",
+        # # "palletizing-boxes-feedback-llava-50_demos-2024-01-09.json",
+        # "cogvlm new exp":"block-insertion-cogvlm-correction_5examples-correction_feedback-50_demos-2024-01-13.json",
+        # "llava new exp":"block-insertion-llava-correction_feedback-50_demos-2024-01-13.json",
+        "llava low thresholding palletizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-no_threshold-2024-01-15.json",
+        "llava two thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-15.json",
+        # "llava three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
+        "llava 0.5 0.9 three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
+        "llava newer experiment with more examples": "palletizing-boxes-llava-correction_7-correction_feedback-20_demos-2024-01-16-16.json"
+    }
 
     plt.figure(figsize=(10, 6))  # Set the figure size
 
@@ -154,7 +166,7 @@ def calculate_experiments_and_plot():
 
     overall_steps = 0
 
-    for filename in log_files:
+    for label, filename in log_files.items():
         data = load_json_log(Path(log_dir, filename))
 
         rewards, successes = extract_grouped_step_rewards_and_successes(data)
@@ -177,19 +189,22 @@ def calculate_experiments_and_plot():
         comp_rewards.append(rewards)
         comp_successes.append(success_count)
 
-        print("Filename: ", filename)
-        print("Steps: ", over_all_steps)
-        print("Success steps: ", overall_success_steps)
-        print("Overall rewards: ", np.array(overall_rewards).sum())
+        print("Experiment: ", label)
+        print("   Filename: ", filename)
+        print("   Steps: ", over_all_steps)
+        print("   Success steps: ", overall_success_steps)
+        print("   Overall rewards: ", np.array(overall_rewards).sum())
         if overall_success_steps > 0:
             print(
-                "Average rewards: ",
+                "   Average rewards: ",
                 np.array(overall_rewards).sum() / over_all_steps,
             )
 
         # rewards = moving_average(rewards, windowsize)
 
-    plot_datas(comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=None)
+    plot_datas(
+        comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=windowsize
+    )
     plot_datas(
         comp_successes,
         f"{plot_dir}/{prefix}success_count",
@@ -199,21 +214,48 @@ def calculate_experiments_and_plot():
 
 def compare_feedback_accuracy():
     log_files: Dict = {
-        "cogvlm": "palletizing-boxes-feedback-cogvlm-100_demos-2024-01-01.json",
-        "llava": "palletizing-boxes-feedback-llava-100_demos-2024-01-02.json",
+        "cogvlm_palletizing": "palletizing-boxes-feedback-cogvlm-20_demos-2024-01-10.json",
+        "llava_palletizing": "palletizing-boxes-feedback-cogvlm-20_demos-2024-01-10.json",
+        "cogvlm_block_insertion": "block-insertion-feedback-cogvlm-20_demos-2024-01-10.json",
+        "llava_block_insertion": "block-insertion-feedback-llava-20_demos-2024-01-10.json",
+        "distinct sample llava feedback palletizing-boxes": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-12.json",
+        "distinct sample cogvlm feedback palletizing-boxes": "palletizing-boxes-cogvlm-correction_5examples-correction_feedback-20_demos-2024-01-11.json",
+        "distinct sample cogvlm feedback block-insertion": "block-insertion-cogvlm-correction_feedback-20_demos-2024-01-12.json",
+        "distinct sample llava feedback block-insertion": "block-insertion-llava-correction_feedback-20_demos-2024-01-12.json",
     }
+
+    #  block-insertion-feedback-cogvlm-20_demos-2024-01-10.json
+    #  block-insertion-feedback-llava-20_demos-2024-01-10.json
 
     log_dir = "./logs"
 
+    feedback_predictions_list = []
+
+    data_list = []
+
     for key, value in log_files.items():
         data = load_json_log(Path(log_dir, value))
+
+        data_list.append(data)
 
         feedback_predictions = extract_feedback_prediction(data)
 
         total = len(feedback_predictions)
         correct = sum(feedback_predictions)
 
+        feedback_predictions_list.append(feedback_predictions)
+
         print(f"{key}: {correct}/{total} = {correct/total}")
+
+    for pred_1, pred_2 in zip(
+        feedback_predictions_list[0], feedback_predictions_list[1]
+    ):
+        if pred_1 != pred_2:
+            print("Different")
+
+    # breakpoint()
+
+    # print("Hello")
 
 
 if __name__ == "__main__":
