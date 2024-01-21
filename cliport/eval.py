@@ -191,6 +191,7 @@ def correction_pipeline(
     correction_agent: LLM,
     obs: Dict[str, Tuple],
     lang_goal: str,
+    instruction: str,
     chroma_collection: Collection,
     vcfg: Dict,
 ) -> str:
@@ -198,7 +199,9 @@ def correction_pipeline(
     obs_image.resize((336, 336))
     obs_image.format = "PNG"
 
-    curr_mem = MemEntry(lang_goal, images=[obs_image], task=vcfg["eval_task"])
+    curr_mem = MemEntry(
+        lang_goal, instruction=instruction, images=[obs_image], task=vcfg["eval_task"]
+    )
 
     embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
 
@@ -297,6 +300,7 @@ def correction_feedback_pipeline(
     correction_agent: LLM,
     obs_queue: deque,
     lang_goal: str,
+    instruction: str,
     chroma_collection: Collection,
     vcfg: Dict,
 ):
@@ -308,6 +312,7 @@ def correction_feedback_pipeline(
 
     curr_mem = MemEntry(
         lang_goal,
+        instruction=instruction,
         images=obs_images,
         task=vcfg["eval_task"],
     )
@@ -379,6 +384,7 @@ def feedback_pipeline(
     feedback_agent: LLM,
     obs_queue: deque,
     lang_goal: str,
+    instruction: str,
     chroma_collection: Collection,
     vcfg: Dict,
 ) -> Tuple[MemEntry, str]:
@@ -389,7 +395,8 @@ def feedback_pipeline(
         img.format = "PNG"
 
     curr_mem = MemEntry(
-        lang_goal,
+        lang_goal=lang_goal,
+        instruction=instruction,
         images=obs_images,
         task=vcfg["eval_task"],
     )
@@ -658,6 +665,12 @@ def main(vcfg):
                 env.seed(seed)
                 env.set_task(task)
 
+                # implementation for seperate language goal from intention.
+                # Assumption: the linear movement of language goals
+                original_language_goal = task.lang_goals
+
+                breakpoint()
+
                 obs = env.reset()
                 info = env.info
                 reward = 0
@@ -678,9 +691,6 @@ def main(vcfg):
                 obs_queue.append(obs["color"][0])
 
                 feedback = ""
-                # initialize the memory
-
-                # memory = NaiveMemory(NaiveMemStorage(vcfg["memory_storage_dir"]))
 
                 if vcfg["compare_logging"]:
                     assert epoch_log_dict is not None, "epoch_log_dict is None"
@@ -696,7 +706,8 @@ def main(vcfg):
                         extracted_lang_goal = correction_pipeline(
                             correction_agent=correction_agent,
                             obs=obs,
-                            lang_goal=info["lang_goal"],
+                            instruction=info["lang_goal"],
+                            lang_goal=original_language_goal[0],
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
                         )
@@ -751,7 +762,8 @@ def main(vcfg):
                         curr_mem = correction_feedback_pipeline(
                             correction_agent=correction_feedback_agent,
                             obs_queue=obs_queue,
-                            lang_goal=info["lang_goal"],
+                            lang_goal=original_language_goal[0],
+                            instruction=info["lang_goal"],
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
                         )
@@ -784,7 +796,8 @@ def main(vcfg):
                         curr_mem, feedback = feedback_pipeline(
                             feedback_agent=feedback_agent,
                             obs_queue=obs_queue,
-                            lang_goal=lang_goal,
+                            lang_goal=original_language_goal[0],
+                            instruction=info["lang_goal"],
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
                         )
@@ -809,6 +822,11 @@ def main(vcfg):
 
                     # obs_queue.popleft();
                     total_reward += reward
+
+                    # implement for seperate language goal from intention
+                    if not len(original_language_goal) == 1:
+                        original_language_goal.pop(0)
+
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
                     if done:
                         env.add_video_end_frame()
