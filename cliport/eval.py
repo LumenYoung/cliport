@@ -667,11 +667,13 @@ def main(vcfg):
 
                 # implementation for seperate language goal from intention.
                 # Assumption: the linear movement of language goals
-                original_language_goal = task.lang_goals
-
-                breakpoint()
 
                 obs = env.reset()
+
+                original_language_goal = []
+                if not len(env.task.lang_goals) == 0:
+                    original_language_goal = env.task.lang_goals
+
                 info = env.info
                 reward = 0
 
@@ -758,6 +760,10 @@ def main(vcfg):
                             [Image.fromarray(np.array(obs)) for obs in list(obs_queue)]
                         )
 
+                    if len(original_language_goal) < 1:
+                        # catch point to debug the index error occurs randomly
+                        breakpoint()
+
                     if vcfg["correction_feedback"]:
                         curr_mem = correction_feedback_pipeline(
                             correction_agent=correction_feedback_agent,
@@ -824,7 +830,7 @@ def main(vcfg):
                     total_reward += reward
 
                     # implement for seperate language goal from intention
-                    if not len(original_language_goal) == 1:
+                    if len(original_language_goal) > 1:
                         original_language_goal.pop(0)
 
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
