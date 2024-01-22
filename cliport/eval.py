@@ -284,7 +284,7 @@ def correction_pipeline(
             memories=mems,
             curr_mem=curr_mem,
             goal=goal_str,
-            system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. similar language goals has similar success rate. ",
+            system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its goal. similar instructions has similar success rate. ",
         )
 
         response: str = correction_agent(
