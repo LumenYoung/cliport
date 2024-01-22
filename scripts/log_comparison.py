@@ -152,7 +152,9 @@ def calculate_experiments_and_plot():
         "llava two thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-15.json",
         # "llava three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
         "llava 0.5 0.9 three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
-        "llava newer experiment with more examples": "palletizing-boxes-llava-correction_7-correction_feedback-20_demos-2024-01-16-16.json"
+        "llava newer experiment with more examples": "palletizing-boxes-llava-correction_7-correction_feedback-20_demos-2024-01-16-16.json",
+        "llava block-insertion seperate intention from instruction": "block-insertion-llava-correction_5-correction_feedback-20_demos-2024-01-22-00.json",
+        "llava pallatizing-box seperate intention from instruction": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-09.json",
     }
 
     plt.figure(figsize=(10, 6))  # Set the figure size
