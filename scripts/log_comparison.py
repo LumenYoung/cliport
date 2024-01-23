@@ -3,6 +3,7 @@ from pathlib import Path
 import orjson
 from typing import Dict, List, Tuple, Optional
 import numpy as np
+from chromadb.api.models.Collection import Collection
 import matplotlib.pyplot as plt
 
 
@@ -155,6 +156,11 @@ def calculate_experiments_and_plot():
         "llava newer experiment with more examples": "palletizing-boxes-llava-correction_7-correction_feedback-20_demos-2024-01-16-16.json",
         "llava block-insertion seperate intention from instruction": "block-insertion-llava-correction_5-correction_feedback-20_demos-2024-01-22-00.json",
         "llava pallatizing-box seperate intention from instruction": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-09.json",
+        "llava correct pallatizing-box": "palletizing-boxes-llava-correction_3-correction_feedback-20_demos-2024-01-22-17.json",
+        "llava with true and false filter": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-23.json",
+        "llava with all false code base, same setup from previous": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-09.json",
+        "llava like previous, but with sampling disabled": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-11.json",
+        "llava from previous, but using the correct vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-18.json",
     }
 
     plt.figure(figsize=(10, 6))  # Set the figure size
@@ -165,8 +171,6 @@ def calculate_experiments_and_plot():
     comp_successes = []
 
     prefix = longest_common_prefix(log_files)
-
-    overall_steps = 0
 
     for label, filename in log_files.items():
         data = load_json_log(Path(log_dir, filename))
