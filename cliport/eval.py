@@ -658,8 +658,6 @@ def main(vcfg):
             collection_name = vcfg["vector_base"]
             vec_store = chromadb.PersistentClient(path="./chroma_db")
 
-            one_coll = vec_store.get_collection("first_selection")
-
             # ls = vec_store.list_collections()
 
             # known issue here: assume the vector_base collection exists

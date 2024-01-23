@@ -30,8 +30,8 @@ feedback_n_examples: 3
 
 vector_base: "exp1_base"
 vector_base_control: True
-vector_base_source: "first_selection-copy"
-# vector_base_source: "first_selection"
+# vector_base_source: "first_selection-copy"
+vector_base_source: "first_selection"
 
 correction: True
 correction_agent: "llava"
