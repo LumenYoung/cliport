@@ -50,6 +50,23 @@ DEFAULT_IMAGE_TOKEN = "<image>"
 # -----------------------------------------------------------------------------
 
 
+def list_collection_entries(collection: Collection):
+    peek_result = collection.peek(limit=1000)
+
+    count = 0
+    success_count = 0
+    for metadata, _ in zip(peek_result["metadatas"], peek_result["ids"]):
+        print(
+            f"task: {metadata['task']} {metadata['lang_goal']} is {metadata['success']}"
+        )
+        count += 1
+        success_count += 1 if metadata["success"] else 0
+
+    print("success rate: ", success_count / count)
+    if len(peek_result["ids"]) != 1000:
+        print("Total number of entries:", len(peek_result["ids"]))
+
+
 def copy_collection(
     collection_from: str,
     collection_to: str,
@@ -76,7 +93,6 @@ def copy_collection(
 
     for metadata in metadatas:
         mem = MemEntry.from_dict(metadata)
-
         update_collection(mem, collection_to)
 
 
@@ -103,7 +119,7 @@ def get_memories(
     embedding: List[float],
     collection: Collection,
     filters: List[Tuple[int, Optional[Dict]]],
-    sample: bool = True,
+    sample: bool = False,
 ) -> List[Optional[MemEntry]]:
     mems: List[Optional[MemEntry]] = []
 
@@ -217,7 +233,7 @@ def correction_pipeline(
     )
 
     judge_mems = get_memories(
-        n_mems=vcfg["correction_n_examples"],
+        n_mems=vcfg["correction_judge_n_examples"],
         embedding=embedding,
         collection=chroma_collection,
         filters=judge_filters,
@@ -247,25 +263,28 @@ def correction_pipeline(
             filters = [
                 (
                     vcfg["correction_n_examples"],
-                    {"task": {"$ne": vcfg["eval_task"]}},
-                )
+                    {"$and": [{"task": {"$ne": vcfg["eval_task"]}}, {"success": True}]},
+                ),
             ]
         else:
             goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information from our observation can be helpful. Therefore we use the improved instruction: "
             filters = [
+                # {"success": True},
+                # {"task": "block-insertion"},
+                # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
                 (
-                    2 * vcfg["correction_n_examples"] // 3,
-                    {"task": {"$ne": vcfg["eval_task"]}},
+                    vcfg["correction_n_examples"] // 3,
+                    {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+                ),
+                (
+                    vcfg["correction_n_examples"] // 3,
+                    {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
                 ),
                 (
                     vcfg["correction_n_examples"] // 3,
                     {"task": {"$eq": vcfg["eval_task"]}},
                 ),
             ]
-
-    # while len(filters) < vcfg["correction_n_examples"]:
-    #     filters.append(None)
-    # filters = sorted(filters, key=lambda x: x is None)
 
     decided_lang_goal = lang_goal
 
@@ -324,8 +343,12 @@ def correction_feedback_pipeline(
         # {"task": "block-insertion"},
         # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
         (
-            2 * vcfg["correction_feedback_n_examples"] // 3,
-            {"task": {"$eq": vcfg["eval_task"]}},
+            1 * vcfg["correction_feedback_n_examples"] // 3,
+            {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        ),
+        (
+            1 * vcfg["correction_feedback_n_examples"] // 3,
+            {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
         ),
         (
             vcfg["correction_feedback_n_examples"] // 3,
@@ -635,8 +658,11 @@ def main(vcfg):
             collection_name = vcfg["vector_base"]
             vec_store = chromadb.PersistentClient(path="./chroma_db")
 
+            one_coll = vec_store.get_collection("first_selection")
+
             # ls = vec_store.list_collections()
 
+            # known issue here: assume the vector_base collection exists
             if vcfg["vector_base_control"] and vcfg["correction_feedback"]:
                 vec_store.delete_collection(collection_name)
 
@@ -727,6 +753,7 @@ def main(vcfg):
                     act = agent.act(obs, info, goal)
 
                     obs, reward, done, info = env.step(action=act, feedback=feedback)
+
                     obs_queue.append(obs["color"][0])
 
                     step_log_dict = None
@@ -784,7 +811,7 @@ def main(vcfg):
                             )
 
                             logging.info(
-                                f"Evaluation on step {i}: success {curr_mem.success}"
+                                f"Evaluation on step {i}: success {curr_mem.success}. Correct evaluation: {gt_success == curr_mem.success}"
                             )
 
                             if vcfg["correction_feedback_use_gt_label"]:
@@ -820,7 +847,7 @@ def main(vcfg):
                             assert step_log_dict is not None, "step_log_dict is None"
 
                             step_log_dict["feedback_prediction"] = (
-                                True if gt_success == curr_mem.success else False
+                                gt_success == curr_mem.success
                             )
                             step_log_dict["feedback"] = feedback
 
