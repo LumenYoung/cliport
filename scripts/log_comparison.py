@@ -161,6 +161,8 @@ def calculate_experiments_and_plot():
         "llava with all false code base, same setup from previous": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-09.json",
         "llava like previous, but with sampling disabled": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-11.json",
         "llava from previous, but using the correct vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-18.json",
+        "llava from previous, but using low threshold prompt": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
+        "llava low thresholding using the all fail vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
     }
 
     plt.figure(figsize=(10, 6))  # Set the figure size
