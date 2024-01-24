@@ -210,6 +210,7 @@ def correction_pipeline(
     instruction: str,
     chroma_collection: Collection,
     vcfg: Dict,
+    step_log: Optional[Dict] = None,
 ) -> str:
     obs_image = Image.fromarray(np.array(obs["color"][1]))
     obs_image.resize((336, 336))
@@ -255,10 +256,13 @@ def correction_pipeline(
         )
     ]
 
+    if step_log is not None:
+        step_log["success"] = success_rate
+
     if not vcfg["exp_no_threshold"]:
-        if success_rate > 0.9:
+        if success_rate > 0.8:
             goal_str = "Given the memory, this instruction is likely to success"
-        if success_rate < 0.6:
+        if success_rate < 0.4:
             goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information we observed. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
             filters = [
                 (
@@ -305,6 +309,11 @@ def correction_pipeline(
             goal=goal_str,
             system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its goal. similar instructions has similar success rate. ",
         )
+
+        if step_log is not None:
+            step_log["prompt"] = prompt.get_instruction_prompt(
+                no_image_in_example=True, compact_curr=True
+            )["prompt"]
 
         response: str = correction_agent(
             **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
@@ -728,6 +737,13 @@ def main(vcfg):
 
                     print(f"Lang Goal: {lang_goal}")
 
+                    step_log_dict = None
+                    if vcfg["compare_logging"]:
+                        assert epoch_log_dict is not None, "epoch_log_dict is None"
+
+                        epoch_log_dict[f"step_{i}"] = {}
+                        step_log_dict = epoch_log_dict[f"step_{i}"]
+
                     if vcfg["correction"]:
                         extracted_lang_goal = correction_pipeline(
                             correction_agent=correction_agent,
@@ -736,6 +752,7 @@ def main(vcfg):
                             lang_goal=original_language_goal[0],
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
+                            step_log=step_log_dict,
                         )
 
                         # chop the instruction if it exceeds the limit of 77 tokens
@@ -754,13 +771,8 @@ def main(vcfg):
 
                     obs_queue.append(obs["color"][0])
 
-                    step_log_dict = None
                     if vcfg["compare_logging"]:
-                        assert epoch_log_dict is not None, "epoch_log_dict is None"
-
-                        epoch_log_dict[f"step_{i}"] = {}
-                        step_log_dict = epoch_log_dict[f"step_{i}"]
-
+                        assert step_log_dict is not None, "step_log_dict is None"
                         if isinstance(reward, np.float64):
                             step_log_dict["reward"] = reward.item()
                         else:

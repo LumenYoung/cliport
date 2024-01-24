@@ -75,7 +75,7 @@ function exp_compare_feedback_accuracy() {
                          model_task=multi-language-conditioned \
                          agent=cliport \
                          mode=test \
-                         n_demos=20 \
+                         n_demos=3 \
                          train_demos=1000 \
                          exp_folder=cliport_quickstart \
                          checkpoint_type=test_best \
