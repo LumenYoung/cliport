@@ -45,7 +45,7 @@ correction_judge_n_examples: 8
 llm_embedding_url:  "http://pearl9.informatik.privat:6000/embedding"
 llm_server_url:  "http://pearl9.informatik.privat:6000/conversation"
 
-exp_no_threshold: True
+exp_no_threshold: False
 
 compare_logging: True
 compare_logging_path: "/home/yang/cliport/logs"
