@@ -715,10 +715,13 @@ def main(vcfg):
                 # if not len(env.task.lang_goals) == 0:
                 #     original_language_goal = env.task.lang_goals
 
+                original_language_goal_backup = None
                 if i == 0:
                     original_language_goal = env.task.lang_goals
+                    original_language_goal_backup = env.task.lang_goals
                 else:
-                    env.task.lang_goals = original_language_goal
+                    env.task.lang_goals = original_language_goal_backup
+                    original_language_goal = original_language_goal_backup
 
                 info = env.info
                 reward = 0
