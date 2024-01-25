@@ -258,6 +258,7 @@ def correction_pipeline(
 
     if step_log is not None:
         step_log["queried_success_rate"] = success_rate
+        step_log["instruction"] = instruction
 
     if not vcfg["exp_no_threshold"]:
         if success_rate > 0.8:
@@ -267,7 +268,7 @@ def correction_pipeline(
             goal_str = "Given the memory, this instruction is likely to success"
         if success_rate < 0.4:
             if step_log is not None:
-                step_log["enter mid threshold"] = True
+                step_log["enter low threshold"] = True
             goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information we observed. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
             filters = [
                 (
@@ -277,7 +278,7 @@ def correction_pipeline(
             ]
         else:
             if step_log is not None:
-                step_log["enter low threshold"] = True
+                step_log["enter mid threshold"] = True
             goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information from our observation can be helpful. Therefore we use the improved instruction: "
             filters = [
                 # {"success": True},
@@ -711,8 +712,13 @@ def main(vcfg):
                 obs = env.reset()
 
                 original_language_goal = []
-                if not len(env.task.lang_goals) == 0:
+                # if not len(env.task.lang_goals) == 0:
+                #     original_language_goal = env.task.lang_goals
+
+                if i == 0:
                     original_language_goal = env.task.lang_goals
+                else:
+                    env.task.lang_goals = original_language_goal
 
                 info = env.info
                 reward = 0
