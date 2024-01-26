@@ -41,6 +41,7 @@ import orjson
 import random
 
 import time
+from copy import deepcopy
 
 
 DEFAULT_IMAGE_TOKEN = "<image>"
@@ -640,6 +641,7 @@ def main(vcfg):
             log_dict["correction_n_examples"] = vcfg["correction_n_examples"]
             log_dict["feedback_n_examples"] = vcfg["feedback_n_examples"]
             log_dict["compact_curr_mem"] = vcfg["compact_curr_mem"]
+            log_dict["vector_base"] = vcfg["vector_base_source"]
 
         feedback_agent = None
         if vcfg["feedback"]:
@@ -685,6 +687,9 @@ def main(vcfg):
 
             chroma_collection = vec_store.get_or_create_collection(collection_name)
 
+            # avoid potential out of bound
+            back_lang_goal = []
+
             # Run testing and save total rewards with last transition info.
             for i in range(0, n_demos):
                 print(f"Test: {i + 1}/{n_demos}")
@@ -715,13 +720,11 @@ def main(vcfg):
                 # if not len(env.task.lang_goals) == 0:
                 #     original_language_goal = env.task.lang_goals
 
-                original_language_goal_backup = None
                 if i == 0:
-                    original_language_goal = env.task.lang_goals
-                    original_language_goal_backup = env.task.lang_goals
+                    original_language_goal = deepcopy(env.task.lang_goals)
+                    back_lang_goal = deepcopy(env.task.lang_goals)
                 else:
-                    env.task.lang_goals = original_language_goal_backup
-                    original_language_goal = original_language_goal_backup
+                    original_language_goal = deepcopy(back_lang_goal)
 
                 info = env.info
                 reward = 0
@@ -883,8 +886,6 @@ def main(vcfg):
                     total_reward += reward
 
                     # implement for seperate language goal from intention
-                    if len(original_language_goal) > 1:
-                        original_language_goal.pop(0)
 
                     print(f"Total Reward: {total_reward:.3f} | Done: {done}\n")
                     if done:
