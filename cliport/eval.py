@@ -267,7 +267,7 @@ def correction_pipeline(
                 step_log["enter high threshold"] = True
 
             goal_str = "Given the memory, this instruction is likely to success"
-        if success_rate < 0.4:
+        else:
             if step_log is not None:
                 step_log["enter low threshold"] = True
             goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information we observed. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
@@ -277,27 +277,27 @@ def correction_pipeline(
                     {"$and": [{"task": {"$ne": vcfg["eval_task"]}}, {"success": True}]},
                 ),
             ]
-        else:
-            if step_log is not None:
-                step_log["enter mid threshold"] = True
-            goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information from our observation can be helpful. Therefore we use the improved instruction: "
-            filters = [
-                # {"success": True},
-                # {"task": "block-insertion"},
-                # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-                (
-                    vcfg["correction_n_examples"] // 3,
-                    {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-                ),
-                (
-                    vcfg["correction_n_examples"] // 3,
-                    {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
-                ),
-                (
-                    vcfg["correction_n_examples"] // 3,
-                    {"task": {"$eq": vcfg["eval_task"]}},
-                ),
-            ]
+        # else:
+        #     if step_log is not None:
+        #         step_log["enter mid threshold"] = True
+        #     goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information from our observation can be helpful. Therefore we use the improved instruction: "
+        #     filters = [
+        #         # {"success": True},
+        #         # {"task": "block-insertion"},
+        #         # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        #         (
+        #             vcfg["correction_n_examples"] // 3,
+        #             {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        #         ),
+        #         (
+        #             vcfg["correction_n_examples"] // 3,
+        #             {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
+        #         ),
+        #         (
+        #             vcfg["correction_n_examples"] // 3,
+        #             {"task": {"$eq": vcfg["eval_task"]}},
+        #         ),
+        #     ]
 
     decided_instruction = lang_goal
 
