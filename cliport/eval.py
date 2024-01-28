@@ -259,7 +259,7 @@ def correction_pipeline(
 
     if step_log is not None:
         step_log["queried_success_rate"] = success_rate
-        step_log["instruction"] = instruction
+        step_log["given_instruction"] = instruction
 
     if not vcfg["exp_no_threshold"]:
         if success_rate > 0.8:
@@ -299,7 +299,7 @@ def correction_pipeline(
                 ),
             ]
 
-    decided_lang_goal = lang_goal
+    decided_instruction = lang_goal
 
     if not success_rate > 0.9 or vcfg["exp_no_threshold"]:
         mems = get_memories(
@@ -328,9 +328,9 @@ def correction_pipeline(
             **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
         )
 
-        decided_lang_goal = extract_instruction_from_response(response)
+        decided_instruction = extract_instruction_from_response(response)
 
-    return decided_lang_goal
+    return decided_instruction
 
 
 def correction_feedback_pipeline(
@@ -764,7 +764,7 @@ def main(vcfg):
                         step_log_dict = epoch_log_dict[f"step_{i}"]
 
                     if vcfg["correction"]:
-                        extracted_lang_goal = correction_pipeline(
+                        decided_instruction = correction_pipeline(
                             correction_agent=correction_agent,
                             obs=obs,
                             instruction=info["lang_goal"],
@@ -775,14 +775,14 @@ def main(vcfg):
                         )
 
                         # chop the instruction if it exceeds the limit of 77 tokens
-                        if len(extracted_lang_goal.split(" ")) > 70:
-                            extracted_lang_goal = " ".join(
-                                extracted_lang_goal.split(" ")[:70]
+                        if len(decided_instruction.split(" ")) > 70:
+                            decided_instruction = " ".join(
+                                decided_instruction.split(" ")[:70]
                             )
 
-                        env.task.lang_goals[0] = extracted_lang_goal
+                        env.task.lang_goals[0] = decided_instruction
 
-                        info["lang_goal"] = extracted_lang_goal
+                        info["new instruction"] = decided_instruction
 
                     act = agent.act(obs, info, goal)
 
