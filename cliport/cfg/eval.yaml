@@ -40,7 +40,7 @@ correction_feedback_n_examples: 5
 correction_feedback_use_gt_label: True
 correction_feedback_agent: "llava" # options: cogvlm llava
 correction_n_examples: 5
-correction_judge_n_examples: 8
+correction_judge_n_examples: 12
 
 llm_embedding_url:  "http://pearl9.informatik.privat:6000/embedding"
 llm_server_url:  "http://pearl9.informatik.privat:6000/conversation"
