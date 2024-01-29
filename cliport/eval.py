@@ -262,7 +262,7 @@ def correction_pipeline(
         step_log["given_instruction"] = instruction
 
     if not vcfg["exp_no_threshold"]:
-        if success_rate > 0.8:
+        if success_rate > 0.6:
             if step_log is not None:
                 step_log["enter high threshold"] = True
 
