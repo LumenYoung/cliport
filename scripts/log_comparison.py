@@ -4,6 +4,10 @@ import orjson
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 from chromadb.api.models.Collection import Collection
+
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
@@ -136,33 +140,38 @@ def calculate_experiments_and_plot():
     log_files = os.listdir(log_dir)
 
     log_files = {
-        # "llava palletizing-boxes old 2":"palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
-        # # "towers-of-hanoi-seq-full-100_demos-2023-12-17.json",
-        # # "towers-of-hanoi-seq-full-correction_5examples-100_demos-2023-12-18.json",
-        # "llava block-insertion old":"block-insertion-correction_5examples-correction_feedback-100_demos-2023-12-19.json",
-        # "block insertion vanilla":"block-insertion-100_demos-2023-12-16.json",
-        "vanilla palletizing-boxes": "palletizing-boxes-100_demos-2023-12-16.json",
-        # "llava palletizing-boxes old": "palletizing-boxes-correction_5examples-100_demos-2023-12-16.json",
-        # "correction and feedback no thresholding": "palletizing-boxes-correction_5examples-correction_feedback-100_demos-no_threshold-2023-12-26.json",
-        "correction and feedback thresholded": "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
-        # # "palletizing-boxes-feedback-cogvlm-50_demos-2024-01-08.json",
-        # # "palletizing-boxes-feedback-llava-50_demos-2024-01-09.json",
-        # "cogvlm new exp":"block-insertion-cogvlm-correction_5examples-correction_feedback-50_demos-2024-01-13.json",
-        # "llava new exp":"block-insertion-llava-correction_feedback-50_demos-2024-01-13.json",
-        "llava low thresholding palletizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-no_threshold-2024-01-15.json",
-        "llava two thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-15.json",
-        # "llava three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
-        "llava 0.5 0.9 three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
-        "llava newer experiment with more examples": "palletizing-boxes-llava-correction_7-correction_feedback-20_demos-2024-01-16-16.json",
-        "llava block-insertion seperate intention from instruction": "block-insertion-llava-correction_5-correction_feedback-20_demos-2024-01-22-00.json",
-        "llava pallatizing-box seperate intention from instruction": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-09.json",
-        "llava correct pallatizing-box": "palletizing-boxes-llava-correction_3-correction_feedback-20_demos-2024-01-22-17.json",
-        "llava with true and false filter": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-23.json",
-        "llava with all false code base, same setup from previous": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-09.json",
-        "llava like previous, but with sampling disabled": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-11.json",
-        "llava from previous, but using the correct vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-18.json",
-        "llava from previous, but using low threshold prompt": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
-        "llava low thresholding using the all fail vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
+        # # "llava palletizing-boxes old 2":"palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
+        # # # "towers-of-hanoi-seq-full-100_demos-2023-12-17.json",
+        # # # "towers-of-hanoi-seq-full-correction_5examples-100_demos-2023-12-18.json",
+        # # "llava block-insertion old":"block-insertion-correction_5examples-correction_feedback-100_demos-2023-12-19.json",
+        # # "block insertion vanilla":"block-insertion-100_demos-2023-12-16.json",
+        # "vanilla palletizing-boxes": "palletizing-boxes-100_demos-2023-12-16.json",
+        # # "llava palletizing-boxes old": "palletizing-boxes-correction_5examples-100_demos-2023-12-16.json",
+        # # "correction and feedback no thresholding": "palletizing-boxes-correction_5examples-correction_feedback-100_demos-no_threshold-2023-12-26.json",
+        # "correction and feedback thresholded": "palletizing-boxes-correction_5examples-correction_feedback-100_demos-2023-12-18.json",
+        # # # "palletizing-boxes-feedback-cogvlm-50_demos-2024-01-08.json",
+        # # # "palletizing-boxes-feedback-llava-50_demos-2024-01-09.json",
+        # # "cogvlm new exp":"block-insertion-cogvlm-correction_5examples-correction_feedback-50_demos-2024-01-13.json",
+        # # "llava new exp":"block-insertion-llava-correction_feedback-50_demos-2024-01-13.json",
+        # "llava low thresholding palletizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-no_threshold-2024-01-15.json",
+        # "llava two thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-15.json",
+        # # "llava three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
+        # "llava 0.5 0.9 three thresholding pallatizing box": "palletizing-boxes-llava-correction_5examples-correction_feedback-20_demos-2024-01-16.json",
+        # "llava newer experiment with more examples": "palletizing-boxes-llava-correction_7-correction_feedback-20_demos-2024-01-16-16.json",
+        # "llava block-insertion seperate intention from instruction": "block-insertion-llava-correction_5-correction_feedback-20_demos-2024-01-22-00.json",
+        # "llava pallatizing-box seperate intention from instruction": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-09.json",
+        # "llava correct pallatizing-box": "palletizing-boxes-llava-correction_3-correction_feedback-20_demos-2024-01-22-17.json",
+        # "llava with true and false filter": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-22-23.json",
+        # "llava with all false code base, same setup from previous": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-09.json",
+        # "llava like previous, but with sampling disabled": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-11.json",
+        # "llava from previous, but using the correct vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-18.json",
+        # "llava from previous, but using low threshold prompt": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
+        # "llava low thresholding using the all fail vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
+        "llava second small tryout in 3 epoch with ": "palletizing-boxes-llava-correction_5-correction_feedback-3_demos-2024-01-26-15.json",
+        "llava new try with correct base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-26-23.json",
+        "llava same as previous, but longer": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-27-23.json",
+        "llava with two thresholds": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-28-23.json",
+        "llava with two threshold, but lower the bar": "palletizing-boxes-llava-correction_5-correction_feedback-5_demos-2024-01-29-11.json",
     }
 
     plt.figure(figsize=(10, 6))  # Set the figure size
@@ -210,14 +219,19 @@ def calculate_experiments_and_plot():
 
         # rewards = moving_average(rewards, windowsize)
 
-    plot_datas(
-        comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=windowsize
-    )
-    plot_datas(
-        comp_successes,
-        f"{plot_dir}/{prefix}success_count",
-        ylabel="Success Count",
-    )
+    response = input(f"Filename {prefix}? [y/n]")
+
+    if response == "n":
+        prefix = input("Enter the prefix:")
+
+    # plot_datas(
+    #     comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=windowsize
+    # )
+    # plot_datas(
+    #     comp_successes,
+    #     f"{plot_dir}/{prefix}success_count",
+    #     ylabel="Success Count",
+    # )
 
 
 def compare_feedback_accuracy():
