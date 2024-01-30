@@ -249,7 +249,7 @@ def correction_pipeline(
 
     success_rate = count_success / vcfg["correction_judge_n_examples"]
 
-    goal_str = "Given the memory, this instruction is very likely to fail. A new instruction that is likely to success by adding color information or locational information. And the instruction is a short clear sentence. Therefore we instead use this modified instruction: "
+    goal_str = "Given the memory, this instruction is very likely to fail. Therefore we instead use this new command: "
     filters = [
         (
             vcfg["correction_n_examples"],
