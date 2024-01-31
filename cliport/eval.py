@@ -223,15 +223,20 @@ def summerization_pipeline(
         images.extend(image)
         prompt += f"\n Memory {i+1}: {curr_prompt}"
 
-    prompt += "Given the memories, summarize on which prompt you should try next:"
+    prompt += (
+        "Given the memories, summarize on which prompt you should try next: Response:"
+    )
 
     response = summerization_agent(prompt=prompt, images=images)
 
     summary = summerization_agent(
-        prompt=response + "summerize the above paragraph to compact key points",
+        prompt=prompt
+        + response
+        + "summerize the above paragraph to compact key points",
     )
 
     if step_log is not None:
+        step_log["summarization_prompt"] = prompt
         step_log["response_from_summerization_agent"] = response
         step_log["summary_from_summerization_agent"] = summary
 
