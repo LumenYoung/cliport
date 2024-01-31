@@ -249,12 +249,16 @@ def correction_pipeline(
 
     success_rate = count_success / vcfg["correction_judge_n_examples"]
 
-    goal_str = "Given the memory, this instruction is very likely to fail. Therefore we instead use this new command: "
+    goal_str = "Given the information, write a new instruction:"
     filters = [
         (
-            vcfg["correction_n_examples"],
-            {"task": {"$ne": vcfg["eval_task"]}},
-        )
+            vcfg["correction_n_examples"] // 2,
+            {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        ),
+        (
+            vcfg["correction_n_examples"] // 2,
+            {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
+        ),
     ]
 
     if step_log is not None:
@@ -266,11 +270,11 @@ def correction_pipeline(
             if step_log is not None:
                 step_log["enter high threshold"] = True
 
-            goal_str = "Given the memory, this instruction is likely to success"
+            goal_str = "Given the memory, this instruction is likely to succeed"
         else:
             if step_log is not None:
                 step_log["enter low threshold"] = True
-            goal_str = "Given the memory, this instruction is very likely to fail. Therefore we instead use this new command:"
+            goal_str = "Given the memory, this instruction is very likely to fail. Therefore we instead use this new instruction:"
             filters = [
                 # {"success": True},
                 # {"task": "block-insertion"},
@@ -292,23 +296,23 @@ def correction_pipeline(
         #     if step_log is not None:
         #         step_log["enter mid threshold"] = True
         #     goal_str = "Given the memory, this instruction is possible to fail. Adding color information or locational information from our observation can be helpful. Therefore we use the improved instruction: "
-            # filters = [
-            #     # {"success": True},
-            #     # {"task": "block-insertion"},
-            #     # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-            #     (
-            #         vcfg["correction_n_examples"] // 3,
-            #         {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
-            #     ),
-            #     (
-            #         vcfg["correction_n_examples"] // 3,
-            #         {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
-            #     ),
-            #     (
-            #         vcfg["correction_n_examples"] // 3,
-            #         {"task": {"$eq": vcfg["eval_task"]}},
-            #     ),
-            # ]
+        # filters = [
+        #     # {"success": True},
+        #     # {"task": "block-insertion"},
+        #     # {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        #     (
+        #         vcfg["correction_n_examples"] // 3,
+        #         {"$and": [{"task": vcfg["eval_task"]}, {"success": False}]},
+        #     ),
+        #     (
+        #         vcfg["correction_n_examples"] // 3,
+        #         {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
+        #     ),
+        #     (
+        #         vcfg["correction_n_examples"] // 3,
+        #         {"task": {"$eq": vcfg["eval_task"]}},
+        #     ),
+        # ]
 
     decided_instruction = instruction
 
@@ -327,16 +331,18 @@ def correction_pipeline(
             memories=mems,
             curr_mem=curr_mem,
             goal=goal_str,
-            system_prompt="We are a robot agent doing table-top manipulation. The instruction will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its goal. similar instructions has similar success rate. ",
+            system_prompt="You are a robot agent doing table-top manipulation. The instruction will be given to the agent, and we are trying to distinguish which instruction can successfully achieve its described goal. Similar instructions have similar success probability. ",
         )
 
         if step_log is not None:
             step_log["prompt"] = prompt.get_instruction_prompt(
-                no_image_in_example=True, compact_curr=True
+                no_image_in_example=True, compact_curr=True, curr_with_instruction=False
             )["prompt"]
 
         response: str = correction_agent(
-            **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=True)
+            **prompt.get_instruction_prompt(
+                no_image_in_example=True, compact_curr=True, curr_with_instruction=False
+            )
         )
 
         decided_instruction = extract_instruction_from_response(response)
@@ -397,7 +403,7 @@ def correction_feedback_pipeline(
         memories=mems,
         curr_mem=curr_mem,
         goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
-        system_prompt="We are a robot agent observing table-top manipulation. The language goal will be fed to a model with limited capability for execution and we are trying to distinguish which language goal can successfully achieve its described goal. Similar language goals has similar success rate. ",
+        system_prompt="You are a robot agent doing table-top manipulation. The instruction will be given to the agent, and we are trying to distinguish which instruction can successfully achieve its described goal. Similar instructions have similar success probability. ",
     )
 
     response: str = correction_agent(

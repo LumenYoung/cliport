@@ -39,13 +39,13 @@ correction_feedback: True
 correction_feedback_n_examples: 5
 correction_feedback_use_gt_label: True
 correction_feedback_agent: "llava" # options: cogvlm llava
-correction_n_examples: 5
+correction_n_examples: 4
 correction_judge_n_examples: 8
 
 llm_embedding_url:  "http://pearl9.informatik.privat:6000/embedding"
 llm_server_url:  "http://pearl9.informatik.privat:6000/conversation"
 
-exp_no_threshold: False
+exp_no_threshold: True
 
 compare_logging: True
 compare_logging_path: "/home/yang/cliport/logs"
