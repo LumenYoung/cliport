@@ -204,6 +204,31 @@ def feedback_agent_builder(agent_name: str, llm_server_url: str) -> LLM:
         raise ValueError(f"Unexpected feedback agent name: {agent_name}")
 
 
+def summerization_pipeline(
+    summerization_agent: LLM,
+    mems: List[MemEntry],
+    vcfg: Dict,
+    step_log: Optional[Dict] = None,
+):
+    assert len(mems) > 0, "Unexpected empty memories"
+
+    prompt = "You are summerizing knowledges from the robot manipulation experiences."
+
+    images = []
+
+    for i, mem in enumerate(mems):
+        curr_prompt, image = transform_mem_to_prompt(mem, use_no_image=True)
+        images.extend(image)
+        prompt += f"\n Memory {i+1}: {curr_prompt}"
+
+    prompt += "Given the memories, summarize on which prompt you should try next:"
+
+    response = summerization_agent(prompt=prompt, images=images)
+
+    if step_log is not None:
+        step_log["suggested_prompt"] = response
+
+
 def correction_pipeline(
     correction_agent: LLM,
     obs: Dict[str, Tuple],
@@ -678,6 +703,8 @@ def main(vcfg):
                 vcfg["correction_agent"], vcfg["llm_server_url"]
             )
 
+        summerization_agent = feedback_agent_builder("llava", vcfg["llm_server_url"])
+
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
             # Initialize agent.
@@ -763,6 +790,8 @@ def main(vcfg):
 
                 feedback = ""
 
+                executed_mems: List[MemEntry] = []
+
                 if vcfg["compare_logging"]:
                     assert epoch_log_dict is not None, "epoch_log_dict is None"
                     epoch_log_dict["num_mem"] = chroma_collection.count()
@@ -781,6 +810,14 @@ def main(vcfg):
                         step_log_dict = epoch_log_dict[f"step_{i}"]
 
                     if vcfg["correction"]:
+                        if len(executed_mems) > 0:
+                            summerization_pipeline(
+                                summerization_agent=summerization_agent,
+                                mems=executed_mems,
+                                vcfg=vcfg,
+                                step_log=step_log_dict,
+                            )
+
                         decided_instruction = correction_pipeline(
                             correction_agent=correction_agent,
                             obs=obs,
@@ -863,6 +900,7 @@ def main(vcfg):
                             if vcfg["correction_feedback_use_gt_label"]:
                                 curr_mem.success = gt_success
 
+                        executed_mems.append(curr_mem)
                         add_memory_into_collection(
                             chroma_collection,
                             curr_mem,
