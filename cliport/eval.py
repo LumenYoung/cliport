@@ -310,7 +310,7 @@ def correction_pipeline(
             #     ),
             # ]
 
-    decided_instruction = lang_goal
+    decided_instruction = instruction
 
     if not success_rate > 0.9 or vcfg["exp_no_threshold"]:
         mems = get_memories(
@@ -457,7 +457,7 @@ def feedback_pipeline(
         curr_mem, url=vcfg["llm_embedding_url"]
     )
 
-    filters: List[Dict] = [
+    filters: List[Tuple[int, Dict]] = [
         (2, {"task": {"$eq": vcfg["eval_task"]}}),
         (1, {"task": {"$ne": vcfg["eval_task"]}}),
     ]
