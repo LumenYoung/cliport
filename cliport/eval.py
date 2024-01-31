@@ -212,11 +212,13 @@ def summerization_pipeline(
 ):
     assert len(mems) > 0, "Unexpected empty memories"
 
-    prompt = "You are summerizing knowledges from the robot manipulation experiences."
+    prompt = "You are summerizing knowledges from the robot manipulation experiences. The instruction were given to the agent, and we are trying to distinguish which instruction can successfully achieve its described goal."
 
     images = []
 
-    for i, mem in enumerate(mems):
+    for i, mem in enumerate(reversed(mems)):
+        if i > 8:  # currently only use 8 closest memories in case it used up the memory
+            break
         curr_prompt, image = transform_mem_to_prompt(mem, use_no_image=True)
         images.extend(image)
         prompt += f"\n Memory {i+1}: {curr_prompt}"
@@ -225,8 +227,13 @@ def summerization_pipeline(
 
     response = summerization_agent(prompt=prompt, images=images)
 
+    summary = summerization_agent(
+        prompt=response + "summerize the above paragraph to compact key points",
+    )
+
     if step_log is not None:
-        step_log["suggested_prompt"] = response
+        step_log["response_from_summerization_agent"] = response
+        step_log["summary_from_summerization_agent"] = summary
 
 
 def correction_pipeline(
