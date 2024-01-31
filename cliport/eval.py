@@ -361,12 +361,12 @@ def correction_pipeline(
 
         if step_log is not None:
             step_log["prompt"] = prompt.get_instruction_prompt(
-                no_image_in_example=True, compact_curr=True, curr_with_instruction=False
+                compact_example=True, compact_curr=True, curr_with_instruction=False
             )["prompt"]
 
         response: str = correction_agent(
             **prompt.get_instruction_prompt(
-                no_image_in_example=True, compact_curr=True, curr_with_instruction=False
+                compact_example=True, compact_curr=True, curr_with_instruction=False
             )
         )
 

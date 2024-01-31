@@ -39,7 +39,7 @@ correction_feedback: True
 correction_feedback_n_examples: 5
 correction_feedback_use_gt_label: True
 correction_feedback_agent: "llava" # options: cogvlm llava
-correction_n_examples: 4
+correction_n_examples: 2
 correction_judge_n_examples: 8
 
 llm_embedding_url:  "http://pearl9.informatik.privat:6000/embedding"
