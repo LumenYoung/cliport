@@ -868,7 +868,7 @@ def main(vcfg):
                         else:
                             step_log_dict["done"] = done
 
-                        step_log_dict["lang_goal"] = info["lang_goal"]
+                        step_log_dict["instruction"] = info["lang_goal"]
 
                         assert log_dict is not None, "log_dict is None, unexpected"
                         assert log_file is not None, "log_file is None, unexpected"
