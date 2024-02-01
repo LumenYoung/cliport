@@ -167,16 +167,22 @@ def calculate_experiments_and_plot():
         # "llava from previous, but using the correct vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-23-18.json",
         # "llava from previous, but using low threshold prompt": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
         # "llava low thresholding using the all fail vector base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-no_threshold-2024-01-23-22.json",
-        "llava second small tryout in 3 epoch with ": "palletizing-boxes-llava-correction_5-correction_feedback-3_demos-2024-01-26-15.json",
-        "llava new try with correct base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-26-23.json",
-        "llava same as previous, but longer": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-27-23.json",
+        # "llava second small tryout in 3 epoch with ": "palletizing-boxes-llava-correction_5-correction_feedback-3_demos-2024-01-26-15.json",
+        # "llava new try with correct base": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-26-23.json",
+        # "llava same as previous, but longer": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-27-23.json",
         "llava with two thresholds": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-28-23.json",
         "llava with two threshold, but lower the bar": "palletizing-boxes-llava-correction_5-correction_feedback-5_demos-2024-01-29-11.json",
+        "llava with two threshold, also expand the query size": "palletizing-boxes-llava-correction_5-correction_feedback-5_demos-2024-01-29-16.json",
+        "previous exp with more more demos": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-30-09.json",
+        "tryout with new prompt at Jan 30": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-30-15.json",
+        "tryout new prompt and new threshold at Jan 31": "palletizing-boxes-llava-correction_5-correction_feedback-20_demos-2024-01-31-09.json",
+        "simplified work at Jan 31": "palletizing-boxes-llava-correction_4-correction_feedback-20_demos-no_threshold-2024-01-31-17.json",
+        "simpiified pipeline as well as image for the prompt": "palletizing-boxes-llava-correction_2-correction_feedback-20_demos-no_threshold-2024-01-31-19.json"
     }
 
     plt.figure(figsize=(10, 6))  # Set the figure size
 
-    windowsize = 10
+    windowsize = 1
 
     comp_rewards = []
     comp_successes = []
@@ -224,14 +230,14 @@ def calculate_experiments_and_plot():
     if response == "n":
         prefix = input("Enter the prefix:")
 
-    # plot_datas(
-    #     comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=windowsize
-    # )
-    # plot_datas(
-    #     comp_successes,
-    #     f"{plot_dir}/{prefix}success_count",
-    #     ylabel="Success Count",
-    # )
+    plot_datas(
+        comp_rewards, f"{plot_dir}/{prefix}reward", smooth_window_size=windowsize
+    )
+    plot_datas(
+        comp_successes,
+        f"{plot_dir}/{prefix}success_count",
+        ylabel="Success Count",
+    )
 
 
 def compare_feedback_accuracy():
