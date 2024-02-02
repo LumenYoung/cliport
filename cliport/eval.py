@@ -243,21 +243,12 @@ def summerization_pipeline(
 
 def correction_pipeline(
     correction_agent: LLM,
-    obs: Dict[str, Tuple],
-    lang_goal: str,
-    instruction: str,
+    curr_mem: MemEntry,
+    original_insturction: str,
     chroma_collection: Collection,
     vcfg: Dict,
     step_log: Optional[Dict] = None,
 ) -> str:
-    obs_image = Image.fromarray(np.array(obs["color"][1]))
-    obs_image.resize((336, 336))
-    obs_image.format = "PNG"
-
-    curr_mem = MemEntry(
-        lang_goal, instruction=instruction, images=[obs_image], task=vcfg["eval_task"]
-    )
-
     embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
 
     filters: List[Tuple[int, Optional[Dict]]] = []
@@ -300,7 +291,7 @@ def correction_pipeline(
 
     if step_log is not None:
         step_log["queried_success_rate"] = success_rate
-        step_log["given_instruction"] = instruction
+        step_log["given_instruction"] = original_insturction
 
     if not vcfg["exp_no_threshold"]:
         if success_rate > 0.6:
@@ -351,7 +342,7 @@ def correction_pipeline(
         #     ),
         # ]
 
-    decided_instruction = instruction
+    decided_instruction = original_insturction
 
     if not success_rate > 0.9 or vcfg["exp_no_threshold"]:
         mems = get_memories(
@@ -389,24 +380,11 @@ def correction_pipeline(
 
 def correction_feedback_pipeline(
     correction_agent: LLM,
-    obs_queue: deque,
-    lang_goal: str,
-    instruction: str,
+    curr_mem: MemEntry,
     chroma_collection: Collection,
     vcfg: Dict,
 ):
-    obs_images = [Image.fromarray(np.array(obs)) for obs in obs_queue]
-
-    for img in obs_images:
-        img.resize((336, 336))
-        img.format = "PNG"
-
-    curr_mem = MemEntry(
-        lang_goal,
-        instruction=instruction,
-        images=obs_images,
-        task=vcfg["eval_task"],
-    )
+    breakpoint()
 
     embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
 
@@ -437,12 +415,11 @@ def correction_feedback_pipeline(
 
     prompt = BasePrompt(
         task=vcfg["eval_task"],
-        memories=mems,
+        memories=None,
         curr_mem=curr_mem,
-        goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
-        system_prompt="You are a robot agent doing table-top manipulation. The instruction will be given to the agent, and we are trying to distinguish which instruction can successfully achieve its described goal. Similar instructions have similar success probability. ",
+        goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. Ignore the change of the robot arm. Let's think step by step: ",
+        system_prompt="You are a robot agent observing a table-top manipulation. The instruction is given to an agent, and you try to tell if the instruction has finished the described goal given images",
     )
-    prompt = BasePrompt( task=vcfg["eval_task"], memories=None, curr_mem=curr_mem, goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. Ignore the change of the robot arm. Let's think step by step: ", system_prompt="You are a robot agent observing a table-top manipulation. The instruction is given to an agent, and you try to tell if the instruction has finished the described goal given images",)
 
     response: str = correction_agent(
         **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=False)
@@ -822,6 +799,17 @@ def main(vcfg):
                         epoch_log_dict[f"step_{i}"] = {}
                         step_log_dict = epoch_log_dict[f"step_{i}"]
 
+                    obs_image = Image.fromarray(np.array(obs["color"][1]))
+                    obs_image.resize((336, 336))
+                    obs_image.format = "PNG"
+
+                    curr_mem = MemEntry(
+                        lang_goal=original_language_goal[0],
+                        instruction=info["lang_goal"],
+                        images=[obs_image],
+                        task=vcfg["eval_task"],
+                    )
+
                     if vcfg["correction"]:
                         if len(executed_mems) > 0:
                             summerization_pipeline(
@@ -833,13 +821,14 @@ def main(vcfg):
 
                         decided_instruction = correction_pipeline(
                             correction_agent=correction_agent,
-                            obs=obs,
-                            instruction=info["lang_goal"],
-                            lang_goal=original_language_goal[0],
+                            curr_mem=curr_mem,
+                            original_insturction=curr_mem.instruction,
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
                             step_log=step_log_dict,
                         )
+
+                        curr_mem.instruction = decided_instruction
 
                         # chop the instruction if it exceeds the limit of 77 tokens
                         if len(decided_instruction.split(" ")) > 70:
@@ -890,9 +879,7 @@ def main(vcfg):
                     if vcfg["correction_feedback"]:
                         curr_mem = correction_feedback_pipeline(
                             correction_agent=correction_feedback_agent,
-                            obs_queue=obs_queue,
-                            lang_goal=original_language_goal[0],
-                            instruction=info["lang_goal"],
+                            curr_mem=curr_mem,
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
                         )
