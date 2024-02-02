@@ -383,6 +383,7 @@ def correction_feedback_pipeline(
     curr_mem: MemEntry,
     chroma_collection: Collection,
     vcfg: Dict,
+    step_log_dict: Optional[Dict] = None,
 ):
     embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
 
@@ -419,11 +420,18 @@ def correction_feedback_pipeline(
         system_prompt="You are a robot agent observing a table-top manipulation. The instruction is given to an agent, and you try to tell if the instruction has finished the described goal given images",
     )
 
-    response: str = correction_agent(
+    feedback: str = correction_agent(
         **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=False)
     )
 
-    prompt.add_prompt(response)
+    if step_log_dict is not None:
+        step_log_dict["correction_feedback_prompt"] = prompt.get_instruction_prompt(
+            no_image_in_example=True, compact_curr=False
+        )["prompt"]
+
+        step_log_dict["feedback_content (correction)"] = feedback
+
+    prompt.add_prompt(feedback)
 
     prompt.add_prompt(
         "Gien your reasoning, reply 'true' if success or 'false' if fails. Response: "
@@ -448,7 +456,7 @@ def correction_feedback_pipeline(
 
     curr_mem.success = success
 
-    return curr_mem
+    return curr_mem, feedback
 
 
 def feedback_pipeline(
@@ -875,11 +883,12 @@ def main(vcfg):
                         breakpoint()
 
                     if vcfg["correction_feedback"]:
-                        curr_mem = correction_feedback_pipeline(
+                        curr_mem, feedback = correction_feedback_pipeline(
                             correction_agent=correction_feedback_agent,
                             curr_mem=curr_mem,
                             chroma_collection=chroma_collection,
                             vcfg=vcfg,
+                            step_log_dict=step_log_dict,
                         )
 
                         if vcfg["compare_logging"]:
