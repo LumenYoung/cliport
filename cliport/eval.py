@@ -232,7 +232,7 @@ def summerization_pipeline(
     summary = summerization_agent(
         prompt=prompt
         + response
-        + "summerize the above paragraph to compact key points",
+        + "summerize the above paragraph to compact key points. Summary: ",
     )
 
     if step_log is not None:
