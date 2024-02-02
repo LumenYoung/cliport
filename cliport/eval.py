@@ -442,6 +442,7 @@ def correction_feedback_pipeline(
         goal="Given the current observation and memories, determine if current execution achieves the goal. We analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. We ignore the change of the robot arm. Our reasoning is: ",
         system_prompt="You are a robot agent doing table-top manipulation. The instruction will be given to the agent, and we are trying to distinguish which instruction can successfully achieve its described goal. Similar instructions have similar success probability. ",
     )
+    prompt = BasePrompt( task=vcfg["eval_task"], memories=None, curr_mem=curr_mem, goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. Ignore the change of the robot arm. Let's think step by step: ", system_prompt="You are a robot agent observing a table-top manipulation. The instruction is given to an agent, and you try to tell if the instruction has finished the described goal given images",)
 
     response: str = correction_agent(
         **prompt.get_instruction_prompt(no_image_in_example=True, compact_curr=False)
