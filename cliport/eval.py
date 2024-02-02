@@ -849,7 +849,7 @@ def main(vcfg):
 
                         env.task.lang_goals[0] = decided_instruction
 
-                        info["new instruction"] = decided_instruction
+                        info["lang_goal"] = decided_instruction
 
                     act = agent.act(obs, info, goal)
 
