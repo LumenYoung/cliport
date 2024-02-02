@@ -384,8 +384,6 @@ def correction_feedback_pipeline(
     chroma_collection: Collection,
     vcfg: Dict,
 ):
-    breakpoint()
-
     embedding, _, _ = get_query_from_memory(curr_mem, use_begin=True)
 
     filters: List[Tuple[int, Optional[Dict]]] = [
