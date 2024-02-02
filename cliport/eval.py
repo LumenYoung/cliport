@@ -212,7 +212,7 @@ def summerization_pipeline(
 ):
     assert len(mems) > 0, "Unexpected empty memories"
 
-    prompt = "You are summerizing knowledges from the robot manipulation experiences. The instruction were given to the agent, and we are trying to distinguish which instruction can successfully achieve its described goal."
+    prompt = "You are an agent summerizing knowledges from the robot manipulation experiences. Think deeply and carefully from first principles step by step. Context: The following informations are past executions consists of language goal (the desired outcome) and its instruction (command sent to a manipulation agent), and we are trying to understand if current instructions are useful or not."
 
     images = []
 
@@ -221,24 +221,22 @@ def summerization_pipeline(
             break
         curr_prompt, image = transform_mem_to_prompt(mem, use_no_image=True)
         images.extend(image)
-        prompt += f"\n Memory {i+1}: {curr_prompt}"
+        prompt += f"\n Step {i+1}: {curr_prompt}"
 
-    prompt += (
-        "Given the memories, summarize on which prompt you should try next: Response:"
-    )
+    prompt += "Given the memories, summarize on the performance of past instructions and suggest what might be helpful to tryout next time."
 
     response = summerization_agent(prompt=prompt, images=images)
 
-    summary = summerization_agent(
-        prompt=prompt
-        + response
-        + "summerize the above paragraph to compact key points. Summary: ",
-    )
+    # summary = summerization_agent(
+    #     prompt=prompt
+    #     + response
+    #     + "\n Now summerize to compact key points. Summary: ",
+    # )
 
     if step_log is not None:
         step_log["summarization_prompt"] = prompt
         step_log["response_from_summerization_agent"] = response
-        step_log["summary_from_summerization_agent"] = summary
+        # step_log["summary_from_summerization_agent"] = summary
 
 
 def correction_pipeline(
