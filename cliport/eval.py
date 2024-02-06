@@ -223,7 +223,7 @@ def summerization_pipeline(
         images.extend(image)
         prompt += f"\n Step {i+1}: {curr_prompt}"
 
-    prompt += "Given the memories, summarize on the performance of past instructions and suggest what might be helpful to tryout next time."
+    prompt += "\nGiven the memories, summarize on the performance of past instructions and make high level suggestions for the further exploration. Summerization:"
 
     response = summerization_agent(prompt=prompt, images=images)
 
@@ -374,6 +374,39 @@ def correction_pipeline(
         decided_instruction = extract_instruction_from_response(response)
 
     return decided_instruction
+
+
+def description_pipeline(
+    description_agent: LLM,
+    curr_mem: MemEntry,
+    vcfg: Dict,
+    step_log_dict: Optional[Dict] = None,
+) -> None:
+    prompt = BasePrompt(
+        task=vcfg["eval_task"],
+        memories=None,
+        curr_mem=curr_mem,
+        # goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. Ignore the change of the robot arm. Let's think step by step: ",
+        goal="Describe the difference you've seen from images, response with keypoints. Response:",
+        system_prompt="You are a robot agent observing a table-top manipulation. The instruction is given to an agent, and you try to tell if the instruction has finished the described goal given images",
+    )
+    assert step_log_dict is not None, "step log is None"
+
+    step_log_dict["ask_for_describe_difference"] = description_agent(
+        **prompt.get_instruction_prompt()
+    )
+
+    prompt2 = BasePrompt(
+        task=vcfg["eval_task"],
+        memories=None,
+        curr_mem=curr_mem,
+        # goal="Given the current observation and memories, determine if current execution achieves the goal. Analyze the change of the target object's location from the image, and if similar instruction had good performance in examples. Ignore the change of the robot arm. Let's think step by step: ",
+        goal="Describe the difference you've observed. Based on the observation, response if the instruction is finished. Reseponse:",
+        system_prompt="You are a robot agent observing a table-top manipulation. The instruction is given to an agent, and you try to tell if the instruction has finished the described goal given images",
+    )
+    step_log_dict["ask_for_describe_success"] = description_agent(
+        **prompt2.get_instruction_prompt()
+    )
 
 
 def correction_feedback_pipeline(
@@ -885,6 +918,13 @@ def main(vcfg):
                             correction_agent=correction_feedback_agent,
                             curr_mem=curr_mem,
                             chroma_collection=chroma_collection,
+                            vcfg=vcfg,
+                            step_log_dict=step_log_dict,
+                        )
+
+                        description_pipeline(
+                            description_agent=correction_feedback_agent,
+                            curr_mem=curr_mem,
                             vcfg=vcfg,
                             step_log_dict=step_log_dict,
                         )
