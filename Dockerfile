@@ -80,7 +80,8 @@ RUN sudo pip3 install --no-input \
   chafa.py \
   langchain \
   transforms3d \
-  pysqlite3-binary
+  pysqlite3-binary \
+  langchain_openai
 
 RUN pip3 uninstall --no-input -y wandb \
   && pip3 install --no-input wandb
