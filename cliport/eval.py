@@ -43,6 +43,11 @@ import random
 import time
 from copy import deepcopy
 
+from langchain_openai import OpenAI
+
+from io import BytesIO
+import binascii
+from sklearn.neighbors import KNeighborsClassifier
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 
@@ -335,6 +340,11 @@ def correction_pipeline(
             {"$and": [{"task": vcfg["eval_task"]}, {"success": True}]},
         ),
     ]
+
+    if vcfg["knn_exp"]:
+        assert vcfg["exp_no_threshold"], "Unexpected exp_no_threshold is False"
+
+        filters = [(vcfg["correction_n_examples"], {"knn_label": True})]
 
     if step_log is not None:
         step_log["queried_success_rate"] = success_rate
@@ -778,6 +788,20 @@ def main(vcfg):
             correction_agent = feedback_agent_builder()
             vcfg["correction_agent"], vcfg["llm_server_url"]
         summerization_agent = feedback_agent_builder("llava", vcfg["llm_server_url"])
+
+        # # testout code, should be removed later TODO
+        # buffered = BytesIO()
+        # img = Image.open("/home/yang/llm/examples/robot_move_1.png")
+        # img.resize((336, 336))
+
+        # img.save(buffered, format="PNG")
+        # img_str = binascii.hexlify(buffered.getvalue())
+
+        # summerization_agent(
+        #     "Who is the president of the USA?",
+        #     images={"image_file_1": img_str.decode()},
+        # )
+        # breakpoint()
 
         # Run testing for each training run.
         for train_run in range(vcfg["n_repeats"]):
