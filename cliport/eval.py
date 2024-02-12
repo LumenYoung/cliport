@@ -28,7 +28,7 @@ from cliport.environments.environment import Environment
 
 from PIL import Image
 
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, NamedTuple
 
 from langchain.llms.base import LLM
 from collections import deque
@@ -49,6 +49,55 @@ DEFAULT_IMAGE_TOKEN = "<image>"
 # -----------------------------------------------------------------------------
 # vector base utils
 # -----------------------------------------------------------------------------
+
+
+def label_important_mem(knn_predictor: KNeighborsClassifier, collection: Collection):
+    Data = NamedTuple(
+        "data",
+        [
+            ("embedding", List[float]),
+            ("success", bool),
+            ("id", str),
+            ("metadata", Dict),
+        ],
+    )
+
+    peek_result = collection.peek(limit=1000)
+
+    datas: List[Data] = []
+    for embedding, metadata, id in zip(
+        peek_result["embeddings"], peek_result["metadatas"], peek_result["ids"]
+    ):
+        datas.append(Data(embedding, metadata["success"], id, metadata))
+
+    for data in datas:
+        computed_knn_label = knn_predictor.predict(np.array(data.embedding)[None, :])[0]
+
+        knn_label_field = data.metadata.get("knn_label")
+
+        if computed_knn_label and data.success:
+            data.metadata.update({"knn_label": True})
+            collection.upsert(
+                ids=[data.id], embeddings=[data.embedding], metadatas=[data.metadata]
+            )
+        elif knn_label_field is not None and not computed_knn_label:
+            data.metadata.update({"knn_label": False})
+            collection.upsert(
+                ids=[data.id], embeddings=[data.embedding], metadatas=[data.metadata]
+            )
+
+
+def fit_knn_predictor(knn_predictor: KNeighborsClassifier, collection: Collection):
+    Data = NamedTuple("data", [("embedding", List[float]), ("success", bool)])
+    peek_result = collection.peek(limit=1000)
+    vis_datas: List[Data] = []
+    for embedding, metadata in zip(peek_result["embeddings"], peek_result["metadatas"]):
+        vis_datas.append(Data(embedding, metadata["success"]))
+
+    embeddings = np.array([data.embedding for data in vis_datas])
+    success_labels = np.array([data.success for data in vis_datas])
+
+    knn_predictor.fit(embeddings, success_labels)
 
 
 def list_collection_entries(collection: Collection):
@@ -726,10 +775,8 @@ def main(vcfg):
 
         correction_agent = None
         if vcfg["correction"]:
-            correction_agent = feedback_agent_builder(
-                vcfg["correction_agent"], vcfg["llm_server_url"]
-            )
-
+            correction_agent = feedback_agent_builder()
+            vcfg["correction_agent"], vcfg["llm_server_url"]
         summerization_agent = feedback_agent_builder("llava", vcfg["llm_server_url"])
 
         # Run testing for each training run.
@@ -757,6 +804,12 @@ def main(vcfg):
                 copy_collection(vcfg["vector_base_source"], collection_name, vec_store)
 
             chroma_collection = vec_store.get_or_create_collection(collection_name)
+
+            knn_predictor: Optional[KNeighborsClassifier] = None
+            if vcfg["knn_exp"]:
+                knn_predictor = KNeighborsClassifier(n_neighbors=2)
+                fit_knn_predictor(knn_predictor, chroma_collection)
+                label_important_mem(knn_predictor, chroma_collection)
 
             # avoid potential out of bound
             back_lang_goal = []
@@ -946,10 +999,28 @@ def main(vcfg):
                                 curr_mem.success = gt_success
 
                         executed_mems.append(curr_mem)
+
+                        # TODO
+                        additional_field: Optional[Dict] = None
+                        if vcfg["knn_exp"] and curr_mem.success:
+                            embedding, _, _ = get_query_from_memory(
+                                curr_mem, use_begin=True, url=vcfg["llm_embedding_url"]
+                            )
+
+                            assert knn_predictor is not None, "knn_predictor is None"
+
+                            label = knn_predictor.predict(np.array(embedding)[None, :])[
+                                0
+                            ]
+
+                            if label:
+                                additional_field = {"knn_label": True}
+
                         add_memory_into_collection(
                             chroma_collection,
                             curr_mem,
                             embedding_url=vcfg["llm_embedding_url"],
+                            additional_field=additional_field,
                         )
 
                     if vcfg["feedback"]:
