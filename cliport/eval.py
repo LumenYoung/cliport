@@ -51,6 +51,14 @@ from sklearn.neighbors import KNeighborsClassifier
 
 DEFAULT_IMAGE_TOKEN = "<image>"
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler("cliport_eval_debug.log"), logging.StreamHandler()],
+)
+
 # -----------------------------------------------------------------------------
 # vector base utils
 # -----------------------------------------------------------------------------
@@ -785,9 +793,12 @@ def main(vcfg):
 
         correction_agent = None
         if vcfg["correction"]:
-            correction_agent = feedback_agent_builder()
-            vcfg["correction_agent"], vcfg["llm_server_url"]
-        summerization_agent = feedback_agent_builder("llava", vcfg["llm_server_url"])
+            correction_agent = feedback_agent_builder(
+                vcfg["correction_agent"], vcfg["llm_server_url"]
+            )
+            summerization_agent = feedback_agent_builder(
+                "llava", vcfg["llm_server_url"]
+            )
 
         # # testout code, should be removed later TODO
         # buffered = BytesIO()
