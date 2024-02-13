@@ -1055,7 +1055,7 @@ def main(vcfg):
                             chroma_collection,
                             curr_mem,
                             embedding_url=vcfg["llm_embedding_url"],
-                            additional_field=additional_field,
+                            additional_fields=additional_field,
                         )
 
                     if vcfg["feedback"]:
